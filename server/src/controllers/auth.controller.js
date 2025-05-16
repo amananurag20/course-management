@@ -86,7 +86,19 @@ const getProfile = async (req, res) => {
   try {
     const user = await User.findById(req.user.userId)
       .select("-password")
-      .populate("enrolledCourses");
+      .populate({
+        path: "enrolledCourses",
+        populate: [
+          {
+            path: "instructor",
+            select: "name email",
+          },
+          {
+            path: "students",
+            select: "name email",
+          },
+        ],
+      });
 
     if (!user) {
       return res.status(404).json({ message: "User not found" });
@@ -94,6 +106,7 @@ const getProfile = async (req, res) => {
 
     res.json(user);
   } catch (error) {
+    console.error("Profile fetch error:", error);
     res
       .status(500)
       .json({ message: "Error fetching profile", error: error.message });

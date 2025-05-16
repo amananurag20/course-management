@@ -1,4 +1,4 @@
-import React, { useState, useContext } from "react";
+import React, { useState, useContext, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   MdAccessTime,
@@ -8,95 +8,153 @@ import {
   MdChevronRight,
   MdSearch,
   MdFilterList,
+  MdError,
 } from "react-icons/md";
 import { SidebarContext } from "../context/SidebarContext";
+import { courseService } from "../services/courseService";
+import { useSelector } from "react-redux";
 
-// Mock data for courses
-const coursesData = [
-  {
-    id: 1,
-    title: "Complete React Development",
-    description: "Master modern React with Hooks, Context, Redux, and more",
-    instructor: "John Doe",
-    duration: "12 hours",
-    level: "Intermediate",
-    enrolled: true,
-    rating: 4.8,
-    students: 1234,
-    thumbnail:
-      "https://static.takeuforward.org/content/dsa-basic-2-advance-6djMbmGK",
-    topics: ["React", "JavaScript", "Web Development"],
-  },
-  {
-    id: 2,
-    title: "Advanced JavaScript Concepts",
-    description: "Deep dive into JavaScript fundamentals and advanced patterns",
-    instructor: "Jane Smith",
-    duration: "15 hours",
-    level: "Advanced",
-    enrolled: false,
-    rating: 4.9,
-    students: 2156,
-    thumbnail: "https://via.placeholder.com/300x200",
-    topics: ["JavaScript", "Programming", "Web Development"],
-  },
-  {
-    id: 3,
-    title: "CSS Mastery",
-    description: "Learn modern CSS techniques, Flexbox, Grid, and animations",
-    instructor: "Mike Johnson",
-    duration: "10 hours",
-    level: "Beginner",
-    enrolled: true,
-    rating: 4.7,
-    students: 1876,
-    thumbnail: "https://via.placeholder.com/300x200",
-    topics: ["CSS", "Web Design", "Frontend"],
-  },
-  {
-    id: 4,
-    title: "Node.js Backend Development",
-    description: "Build scalable backend applications with Node.js",
-    instructor: "Sarah Wilson",
-    duration: "18 hours",
-    level: "Intermediate",
-    enrolled: false,
-    rating: 4.6,
-    students: 1543,
-    thumbnail: "https://via.placeholder.com/300x200",
-    topics: ["Node.js", "Backend", "API Development"],
-  },
-];
+const CourseCard = ({ course, isEnrolled, onEnroll }) => (
+  <div
+    className={`bg-gray-800 rounded-xl overflow-hidden transition-all duration-300 hover:transform hover:scale-[1.02] ${
+      isEnrolled ? "cursor-pointer hover:shadow-lg" : ""
+    }`}
+  >
+    {/* Course Image */}
+    <div className="relative h-48">
+      <img
+        src={course.thumbnail || "https://via.placeholder.com/300x200"}
+        alt={course.title}
+        className="w-full h-full object-cover"
+      />
+      {isEnrolled && (
+        <div className="absolute top-4 right-4 bg-green-500 text-white px-3 py-1 rounded-full text-sm font-medium flex items-center">
+          <MdCheck className="mr-1" />
+          Enrolled
+        </div>
+      )}
+    </div>
+
+    {/* Course Content */}
+    <div className="p-6">
+      <div className="flex items-start justify-between mb-2">
+        <h3 className="text-xl font-bold text-white">{course.title}</h3>
+      </div>
+
+      <p className="text-gray-400 mb-4 line-clamp-2">{course.description}</p>
+
+      {/* Course Meta */}
+      <div className="flex items-center gap-4 mb-4 text-sm text-gray-400">
+        <div className="flex items-center">
+          <MdPeople className="mr-1" />
+          {course.students?.length || 0} students
+        </div>
+      </div>
+
+      {/* Instructor */}
+      <div className="flex justify-between items-center text-sm">
+        <div className="text-purple-400">
+          {course.instructor?.name || "Instructor"}
+        </div>
+      </div>
+
+      {/* Action Button */}
+      {!isEnrolled ? (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onEnroll(course._id);
+          }}
+          className="mt-4 w-full py-2 px-4 rounded-lg flex items-center justify-center transition-all duration-300 bg-purple-600 hover:bg-purple-700"
+        >
+          Enroll Now
+          <MdChevronRight className="ml-1" />
+        </button>
+      ) : (
+        <button className="mt-4 w-full py-2 px-4 rounded-lg flex items-center justify-center transition-all duration-300 bg-green-600 hover:bg-green-700">
+          Continue Learning
+          <MdChevronRight className="ml-1" />
+        </button>
+      )}
+    </div>
+  </div>
+);
 
 const Courses = () => {
   const navigate = useNavigate();
   const { isGlobalSidebarOpen } = useContext(SidebarContext);
+  const { user } = useSelector((state) => state.auth);
   const globalSidebarWidth = isGlobalSidebarOpen ? 250 : 0;
 
+  const [courses, setCourses] = useState([]);
+  const [enrolledCourseIds, setEnrolledCourseIds] = useState(new Set());
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedLevel, setSelectedLevel] = useState("all");
   const [enrolledFilter, setEnrolledFilter] = useState("all");
 
+  // Fetch courses and enrolled courses
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const [allCourses, profile] = await Promise.all([
+          courseService.getAllCourses(),
+          courseService.getEnrolledCourses(),
+        ]);
+
+        setCourses(allCourses);
+        setEnrolledCourseIds(new Set(profile.map((course) => course._id)));
+      } catch (err) {
+        setError(err.message || "Failed to fetch courses");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  // Handle course enrollment
+  const handleEnroll = async (courseId) => {
+    try {
+      await courseService.enrollInCourse(courseId);
+      setEnrolledCourseIds((prev) => new Set([...prev, courseId]));
+    } catch (err) {
+      setError(err.message || "Failed to enroll in course");
+    }
+  };
+
   // Filter courses based on search, level, and enrollment
-  const filteredCourses = coursesData.filter((course) => {
+  const filteredCourses = courses.filter((course) => {
+    const isEnrolled = enrolledCourseIds.has(course._id);
     const matchesSearch = course.title
       .toLowerCase()
       .includes(searchQuery.toLowerCase());
     const matchesLevel =
-      selectedLevel === "all" || course.level.toLowerCase() === selectedLevel;
+      selectedLevel === "all" || course.level?.toLowerCase() === selectedLevel;
     const matchesEnrollment =
       enrolledFilter === "all" ||
-      (enrolledFilter === "enrolled" && course.enrolled) ||
-      (enrolledFilter === "not-enrolled" && !course.enrolled);
+      (enrolledFilter === "enrolled" && isEnrolled) ||
+      (enrolledFilter === "not-enrolled" && !isEnrolled);
 
     return matchesSearch && matchesLevel && matchesEnrollment;
   });
 
   const handleCourseClick = (course) => {
-    if (course.enrolled) {
-      navigate(`/courses/${course.id}`);
+    if (enrolledCourseIds.has(course._id)) {
+      navigate(`/courses/${course._id}`);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-purple-500"></div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -111,6 +169,13 @@ const Courses = () => {
             Explore our comprehensive collection of courses
           </p>
         </div>
+
+        {error && (
+          <div className="mb-4 p-4 bg-red-500/20 text-red-400 rounded-lg flex items-center">
+            <MdError className="mr-2" size={20} />
+            {error}
+          </div>
+        )}
 
         {/* Filters and Search */}
         <div className="mb-8 flex flex-wrap gap-4">
@@ -154,7 +219,7 @@ const Courses = () => {
           </div>
         </div>
 
-        {/* Courses Grid - Adjust columns based on sidebar state */}
+        {/* Courses Grid */}
         <div
           className={`grid gap-6 transition-all duration-300 ${
             isGlobalSidebarOpen
@@ -163,96 +228,14 @@ const Courses = () => {
           }`}
         >
           {filteredCourses.map((course) => (
-            <div
-              key={course.id}
-              className={`bg-gray-800 rounded-xl overflow-hidden transition-all duration-300 hover:transform hover:scale-[1.02] ${
-                course.enrolled ? "cursor-pointer hover:shadow-lg" : ""
-              }`}
-              onClick={() => handleCourseClick(course)}
-            >
-              {/* Course Image */}
-              <div className="relative h-48">
-                <img
-                  src={course.thumbnail}
-                  alt={course.title}
-                  className="w-full h-full object-cover"
-                />
-                {course.enrolled && (
-                  <div className="absolute top-4 right-4 bg-green-500 text-white px-3 py-1 rounded-full text-sm font-medium flex items-center">
-                    <MdCheck className="mr-1" />
-                    Enrolled
-                  </div>
-                )}
-              </div>
-
-              {/* Course Content */}
-              <div className="p-6">
-                <div className="flex items-start justify-between mb-2">
-                  <h3 className="text-xl font-bold">{course.title}</h3>
-                  <div className="flex items-center text-yellow-400">
-                    <MdStar />
-                    <span className="ml-1 text-white">{course.rating}</span>
-                  </div>
-                </div>
-
-                <p className="text-gray-400 mb-4 line-clamp-2">
-                  {course.description}
-                </p>
-
-                {/* Course Meta */}
-                <div className="flex items-center gap-4 mb-4 text-sm text-gray-400">
-                  <div className="flex items-center">
-                    <MdAccessTime className="mr-1" />
-                    {course.duration}
-                  </div>
-                  <div className="flex items-center">
-                    <MdPeople className="mr-1" />
-                    {course.students.toLocaleString()} students
-                  </div>
-                </div>
-
-                {/* Topics */}
-                <div className="flex flex-wrap gap-2 mb-4">
-                  {course.topics.map((topic, index) => (
-                    <span
-                      key={index}
-                      className="bg-gray-700 text-sm px-3 py-1 rounded-full"
-                    >
-                      {topic}
-                    </span>
-                  ))}
-                </div>
-
-                {/* Instructor and Level */}
-                <div className="flex justify-between items-center text-sm">
-                  <div className="text-purple-400">{course.instructor}</div>
-                  <div className="text-gray-400">{course.level}</div>
-                </div>
-
-                {/* Action Button */}
-                <button
-                  className={`mt-4 w-full py-2 px-4 rounded-lg flex items-center justify-center transition-all duration-300 ${
-                    course.enrolled
-                      ? "bg-green-600 hover:bg-green-700"
-                      : "bg-purple-600 hover:bg-purple-700"
-                  }`}
-                >
-                  {course.enrolled ? "Continue Learning" : "Enroll Now"}
-                  <MdChevronRight className="ml-1" />
-                </button>
-              </div>
-            </div>
+            <CourseCard
+              key={course._id}
+              course={course}
+              isEnrolled={enrolledCourseIds.has(course._id)}
+              onEnroll={handleEnroll}
+            />
           ))}
         </div>
-
-        {/* No Results Message */}
-        {filteredCourses.length === 0 && (
-          <div className="text-center py-12">
-            <p className="text-gray-400 text-lg">
-              No courses found matching your criteria
-            </p>
-          </div>
-        )}
       </div>
     </div>
   );

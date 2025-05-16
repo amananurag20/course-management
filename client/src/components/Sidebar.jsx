@@ -1,6 +1,6 @@
 import React from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { useSelector } from "react-redux";
+import { useSelector, useDispatch } from "react-redux";
 import {
   MdDashboard,
   MdSchool,
@@ -12,13 +12,16 @@ import {
   MdChevronRight,
   MdPerson,
   MdCode,
+  MdLogout,
 } from "react-icons/md";
 import { useSidebar } from "../context/SidebarContext";
+import { logout } from "../store/slices/authSlice";
 
 function Sidebar() {
   const { isGlobalSidebarOpen, toggleSidebar } = useSidebar();
   const navigate = useNavigate();
   const location = useLocation();
+  const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
 
   const menuItems = [
@@ -66,6 +69,11 @@ function Sidebar() {
     },
   ];
 
+  const handleLogout = () => {
+    dispatch(logout());
+    navigate("/login");
+  };
+
   const handleNavigation = (path) => {
     navigate(path);
   };
@@ -88,9 +96,8 @@ function Sidebar() {
 
       <div
         className={`fixed left-0 top-0 h-screen bg-gray-800 text-white shadow-lg 
-        transition-all duration-300 ease-in-out ${
-          !isGlobalSidebarOpen ? "w-20" : "w-64"
-        }`}
+        transition-all duration-300 ease-in-out flex flex-col
+        ${!isGlobalSidebarOpen ? "w-20" : "w-64"}`}
       >
         {/* Profile Section */}
         <button
@@ -126,7 +133,7 @@ function Sidebar() {
         </button>
 
         {/* Navigation Menu */}
-        <nav className="p-4">
+        <nav className="flex-1 p-4">
           <ul className="space-y-2">
             {menuItems.map((item) => (
               <li key={item.id}>
@@ -152,42 +159,24 @@ function Sidebar() {
           </ul>
         </nav>
 
-        {/* Quick Access - Reels Section */}
-        {isGlobalSidebarOpen && (
-          <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-700">
-            <h3 className="text-lg font-semibold mb-3">Quick Reels</h3>
-            <div className="space-y-3">
-              <div
-                onClick={() => handleNavigation("/reels")}
-                className="bg-gray-700 p-3 rounded-lg hover:bg-gray-600 transition-colors cursor-pointer"
-              >
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-gray-600 rounded-lg flex items-center justify-center">
-                    <MdVideoLibrary size={20} />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium">React Hooks</p>
-                    <p className="text-xs text-gray-400">2 min</p>
-                  </div>
-                </div>
-              </div>
-              <div
-                onClick={() => handleNavigation("/reels")}
-                className="bg-gray-700 p-3 rounded-lg hover:bg-gray-600 transition-colors cursor-pointer"
-              >
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-gray-600 rounded-lg flex items-center justify-center">
-                    <MdVideoLibrary size={20} />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium">CSS Grid</p>
-                    <p className="text-xs text-gray-400">3 min</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Logout Section */}
+        <div className="p-4 border-t border-gray-700">
+          <button
+            onClick={handleLogout}
+            className={`w-full flex items-center ${
+              !isGlobalSidebarOpen ? "justify-center" : "space-x-3"
+            } p-3 rounded-lg transition-all duration-200
+            hover:bg-red-500/10 text-red-400 hover:text-red-300`}
+            title={!isGlobalSidebarOpen ? "Logout" : ""}
+          >
+            <span className="transition-colors">
+              <MdLogout size={24} />
+            </span>
+            {isGlobalSidebarOpen && (
+              <span className="transition-colors">Logout</span>
+            )}
+          </button>
+        </div>
       </div>
     </>
   );

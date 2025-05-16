@@ -110,31 +110,46 @@ const updateCourse = async (req, res) => {
 // Enroll in course
 const enrollInCourse = async (req, res) => {
   try {
-    const course = await Course.findById(req.params.id);
-    if (!course) {
-      return res.status(404).json({ message: "Course not found" });
-    }
+    const courseId = req.params.id;
+    const userId = req.user.userId;
 
-    // Check if already enrolled
-    if (course.students.includes(req.user.userId)) {
+    // First check if user is already enrolled
+    const user = await User.findById(userId);
+    if (user.enrolledCourses.includes(courseId)) {
       return res
         .status(400)
         .json({ message: "Already enrolled in this course" });
     }
 
-    course.students.push(req.user.userId);
-    await course.save();
+    // Add user to course students using $addToSet to prevent duplicates
+    await Course.findByIdAndUpdate(
+      courseId,
+      { $addToSet: { students: userId } },
+      { new: true }
+    );
 
-    // Add course to user's enrolled courses
-    await User.findByIdAndUpdate(req.user.userId, {
-      $push: { enrolledCourses: course._id },
+    // Add course to user's enrolled courses using $addToSet
+    await User.findByIdAndUpdate(
+      userId,
+      { $addToSet: { enrolledCourses: courseId } },
+      { new: true }
+    );
+
+    // Get updated course details
+    const updatedCourse = await Course.findById(courseId)
+      .populate("instructor", "name email")
+      .populate("students", "name email");
+
+    res.json({
+      message: "Successfully enrolled in course",
+      course: updatedCourse,
     });
-
-    res.json({ message: "Successfully enrolled in course" });
   } catch (error) {
-    res
-      .status(500)
-      .json({ message: "Error enrolling in course", error: error.message });
+    console.error("Enrollment error:", error);
+    res.status(500).json({
+      message: "Error enrolling in course",
+      error: error.message,
+    });
   }
 };
 

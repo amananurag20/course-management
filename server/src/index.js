@@ -6,6 +6,7 @@ require("dotenv").config();
 const authRoutes = require("./routes/auth.routes");
 const courseRoutes = require("./routes/course.routes");
 const assignmentRoutes = require("./routes/assignment.routes");
+const userActivityRoutes = require("./routes/userActivity.js");
 
 const app = express();
 
@@ -17,6 +18,7 @@ app.use(express.json());
 app.use("/api/auth", authRoutes);
 app.use("/api/courses", courseRoutes);
 app.use("/api/assignments", assignmentRoutes);
+app.use("/api/user-activity", userActivityRoutes);
 
 // Database connection
 mongoose
