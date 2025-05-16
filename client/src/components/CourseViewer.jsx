@@ -1,146 +1,130 @@
-import React, { useState } from "react";
-import { useParams } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { useSelector } from "react-redux";
+import { courseService } from "../services/courseService";
+import VideoPlayer from "./VideoPlayer";
+import { useSidebar } from "../context/SidebarContext";
 import {
   MdPlayCircle,
   MdCheck,
-  MdLock,
   MdChevronRight,
-  MdNotes,
-  MdEdit,
-  MdDelete,
+  MdArrowBack,
+  MdOndemandVideo,
+  MdArticle,
+  MdExpandMore,
+  MdExpandLess,
 } from "react-icons/md";
-import { useSidebar } from "../context/SidebarContext";
-import VideoPlayer from "./VideoPlayer";
-
-// Mock course content data
-
-const mockCourseData = {
-  1: {
-    title: "Complete React Development",
-    sections: [
-      {
-        title: "Getting Started",
-        lessons: [
-          {
-            id: 1,
-            title: "Course Introduction",
-            duration: "5:30",
-            completed: true,
-            videoId: "HJ8PbXz04Uw",
-            notes:
-              "Welcome to the course! In this introduction, we'll cover the course structure and what you'll learn.",
-          },
-          {
-            id: 2,
-            title: "Setting Up Development Environment",
-            duration: "10:15",
-            completed: true,
-            videoId: "ny2yB7dnWzE",
-            notes:
-              "Learn how to set up your development environment with Node.js, npm, and create-react-app.",
-          },
-        ],
-      },
-      {
-        title: "React Fundamentals",
-        lessons: [
-          {
-            id: 3,
-            title: "Components and Props",
-            duration: "15:45",
-            completed: false,
-            videoId: "ny2yB7dnWzE",
-          },
-          {
-            id: 4,
-            title: "State and Lifecycle",
-            duration: "20:00",
-            completed: false,
-            videoId: "ny2yB7dnWzE",
-          },
-        ],
-      },
-      {
-        title: "Advanced Concepts",
-        lessons: [
-          {
-            id: 5,
-            title: "Hooks Deep Dive",
-            duration: "25:30",
-            completed: false,
-            videoId: "ny2yB7dnWzE",
-          },
-          {
-            id: 6,
-            title: "Context API",
-            duration: "18:20",
-            completed: false,
-            videoId: "ny2yB7dnWzE",
-          },
-        ],
-      },
-    ],
-  },
-};
 
 const CourseViewer = () => {
   const { courseId } = useParams();
+  const navigate = useNavigate();
   const { isGlobalSidebarOpen } = useSidebar();
-  const [currentLesson, setCurrentLesson] = useState(null);
-  const [expandedSections, setExpandedSections] = useState(new Set([0]));
-  const [notes, setNotes] = useState("");
-  const [isEditingNotes, setIsEditingNotes] = useState(false);
-  const [savedNotes, setSavedNotes] = useState({});
+  const { user } = useSelector((state) => state.auth);
+  const [course, setCourse] = useState(null);
+  const [currentModuleIndex, setCurrentModuleIndex] = useState(0);
+  const [currentResourceIndex, setCurrentResourceIndex] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [expandedModules, setExpandedModules] = useState(new Set([0])); // Start with first module expanded
 
-  const course = mockCourseData[courseId];
+  useEffect(() => {
+    const fetchCourse = async () => {
+      try {
+        setLoading(true);
+        const courseData = await courseService.getCourseById(courseId);
+        setCourse(courseData);
+      } catch (err) {
+        setError(err.message || "Failed to fetch course");
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  // Handle section toggle
-  const toggleSection = (index) => {
-    const newExpanded = new Set(expandedSections);
-    if (newExpanded.has(index)) {
-      newExpanded.delete(index);
-    } else {
-      newExpanded.add(index);
+    fetchCourse();
+  }, [courseId]);
+
+  const handleModuleChange = (index) => {
+    setCurrentModuleIndex(index);
+    setCurrentResourceIndex(0); // Reset resource index when changing modules
+    setExpandedModules((prev) => new Set([...prev, index])); // Expand the selected module
+  };
+
+  const handleResourceChange = (moduleIndex, resourceIndex) => {
+    setCurrentModuleIndex(moduleIndex);
+    setCurrentResourceIndex(resourceIndex);
+  };
+
+  const toggleModuleExpansion = (index, event) => {
+    event.stopPropagation(); // Prevent module selection when clicking expand/collapse
+    setExpandedModules((prev) => {
+      const newExpanded = new Set(prev);
+      if (newExpanded.has(index)) {
+        newExpanded.delete(index);
+      } else {
+        newExpanded.add(index);
+      }
+      return newExpanded;
+    });
+  };
+
+  const handleUpdateResources = async () => {
+    try {
+      setLoading(true);
+      const updatedCourse = await courseService.updateCourseModules(
+        courseId,
+        course.modules
+      );
+      setCourse(updatedCourse);
+    } catch (err) {
+      setError(err.message || "Failed to update course resources");
+    } finally {
+      setLoading(false);
     }
-    setExpandedSections(newExpanded);
   };
 
-  // Select a lesson to play
-  const selectLesson = (lesson) => {
-    setCurrentLesson(lesson);
-    setNotes(savedNotes[lesson.id] || lesson.notes || "");
-    setIsEditingNotes(false);
+  // Function to extract YouTube video ID from URL
+  const getYouTubeId = (url) => {
+    if (!url) return null;
+    const regExp =
+      /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+    const match = url.match(regExp);
+    return match && match[2].length === 11 ? match[2] : null;
   };
 
-  const handleSaveNotes = () => {
-    if (currentLesson) {
-      setSavedNotes((prev) => ({
-        ...prev,
-        [currentLesson.id]: notes,
-      }));
-      setIsEditingNotes(false);
-    }
-  };
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-purple-500"></div>
+      </div>
+    );
+  }
 
-  const handleDeleteNotes = () => {
-    if (currentLesson) {
-      setSavedNotes((prev) => {
-        const newNotes = { ...prev };
-        delete newNotes[currentLesson.id];
-        return newNotes;
-      });
-      setNotes(currentLesson.notes || "");
-      setIsEditingNotes(false);
-    }
-  };
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <div className="text-red-500">{error}</div>
+      </div>
+    );
+  }
 
   if (!course) {
-    return <div>Course not found</div>;
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <div className="text-white">Course not found</div>
+      </div>
+    );
   }
+
+  const currentModule = course.modules[currentModuleIndex];
+  const currentResource = currentModule?.resources?.[currentResourceIndex];
+  const videoId =
+    currentResource?.type === "video"
+      ? getYouTubeId(currentResource.url)
+      : null;
 
   return (
     <div
-      className="min-h-screen bg-gray-900 text-white transition-all duration-300"
+      className="min-h-screen bg-gray-900 text-white transition-[margin,width] duration-300"
       style={{
         marginLeft: isGlobalSidebarOpen ? "256px" : "80px",
         width: `calc(100% - ${isGlobalSidebarOpen ? "256px" : "80px"})`,
@@ -148,151 +132,298 @@ const CourseViewer = () => {
     >
       <div className="grid grid-cols-1 lg:grid-cols-3 h-screen">
         {/* Video Player Section */}
-        <div className="lg:col-span-2 bg-gray-900 p-4 flex flex-col overflow-y-auto">
-          <div className="flex flex-col flex-grow justify-center min-h-full">
-            {/* Video Container */}
-            <div className="w-full max-w-4xl mx-auto">
-              <div className="relative" style={{ paddingTop: "56.25%" }}>
-                {currentLesson ? (
-                  <div className="absolute inset-0">
-                    <VideoPlayer videoId={currentLesson.videoId} />
-                  </div>
-                ) : (
-                  <div className="absolute inset-0 flex items-center justify-center bg-gray-800 rounded-lg">
-                    <div className="text-center">
-                      <MdPlayCircle
-                        className="mx-auto text-purple-500"
-                        size={48}
-                      />
-                      <p className="mt-4 text-gray-400">
-                        Select a lesson to start learning
-                      </p>
+        <div className="lg:col-span-2 bg-gray-900 flex flex-col h-screen">
+          <div className="flex-none p-6 animate-fadeIn">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <button
+                  onClick={() => navigate(-1)}
+                  className="p-2 hover:bg-white/5 rounded-full transition-all duration-200 
+                    transform hover:scale-105 active:scale-95"
+                >
+                  <MdArrowBack size={24} />
+                </button>
+                <div className="ml-3">
+                  <h1 className="text-2xl font-bold animate-slideDown">
+                    {course.title}
+                  </h1>
+                  <p className="text-gray-400 text-sm mt-1 animate-slideDown animation-delay-100">
+                    Module {currentModuleIndex + 1} of {course.modules.length}
+                  </p>
+                </div>
+              </div>
+              {course.instructor._id === user?.userId && (
+                <button
+                  onClick={handleUpdateResources}
+                  className="px-4 py-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 
+                    rounded-lg transition-all duration-200 text-sm font-medium
+                    transform hover:scale-105 active:scale-95 animate-fadeIn"
+                >
+                  Update Resources
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto px-6 pb-6 custom-scrollbar">
+            <div className="max-w-4xl mx-auto space-y-6">
+              {/* Video Container */}
+              <div
+                className="bg-gray-800/50 rounded-xl overflow-hidden shadow-lg
+                transform transition-transform duration-300 hover:scale-[1.01]"
+              >
+                <div className="relative" style={{ paddingTop: "56.25%" }}>
+                  {videoId ? (
+                    <div className="absolute inset-0">
+                      <VideoPlayer videoId={videoId} />
+                    </div>
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="text-center">
+                        <MdPlayCircle
+                          className="mx-auto text-gray-400"
+                          size={48}
+                        />
+                        <p className="mt-4 text-gray-400 text-sm">
+                          {currentResource
+                            ? "This resource is not a video"
+                            : "Select a video resource to play"}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Module Content */}
+              <div className="bg-gray-800/30 rounded-xl p-6 backdrop-blur-sm shadow-lg">
+                <h2 className="text-xl font-bold mb-3">
+                  {currentModule.title}
+                </h2>
+                <div className="prose prose-invert max-w-none">
+                  <p className="text-gray-300 text-sm leading-relaxed">
+                    {currentModule.content}
+                  </p>
+                </div>
+              </div>
+
+              {/* Resources Grid */}
+              {currentModule.resources &&
+                currentModule.resources.length > 0 && (
+                  <div className="bg-gray-800/30 rounded-xl p-6 backdrop-blur-sm shadow-lg">
+                    <h3 className="text-lg font-semibold mb-4">
+                      Module Resources
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {currentModule.resources.map((resource, index) => (
+                        <button
+                          key={index}
+                          onClick={() =>
+                            handleResourceChange(currentModuleIndex, index)
+                          }
+                          className={`flex items-center p-3 rounded-lg transition-all duration-200 
+                          ${
+                            currentResourceIndex === index
+                              ? "bg-blue-500/20 ring-1 ring-blue-500/50"
+                              : "bg-gray-700/50 hover:bg-gray-700/70"
+                          }`}
+                        >
+                          <div className="flex items-center w-full">
+                            <div
+                              className={`w-8 h-8 rounded-lg flex items-center justify-center mr-3 
+                            ${
+                              currentResourceIndex === index
+                                ? "bg-blue-500/10"
+                                : "bg-gray-600/30"
+                            }`}
+                            >
+                              {resource.type === "video" ? (
+                                <MdOndemandVideo
+                                  className={
+                                    currentResourceIndex === index
+                                      ? "text-blue-400"
+                                      : "text-gray-400"
+                                  }
+                                  size={20}
+                                />
+                              ) : (
+                                <MdArticle
+                                  className={
+                                    currentResourceIndex === index
+                                      ? "text-blue-400"
+                                      : "text-gray-400"
+                                  }
+                                  size={20}
+                                />
+                              )}
+                            </div>
+                            <div>
+                              <span className="text-sm font-medium block">
+                                {resource.title}
+                              </span>
+                              <span
+                                className={`text-xs ${
+                                  currentResourceIndex === index
+                                    ? "text-blue-300"
+                                    : "text-gray-400"
+                                }`}
+                              >
+                                {resource.type}
+                              </span>
+                            </div>
+                          </div>
+                        </button>
+                      ))}
                     </div>
                   </div>
                 )}
-              </div>
             </div>
-
-            {/* Notes Section */}
-            {currentLesson && (
-              <div className="mt-6 max-w-4xl mx-auto w-full bg-gray-800 rounded-lg p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center space-x-2">
-                    <MdNotes className="text-purple-500" size={24} />
-                    <h3 className="text-xl font-semibold">Lesson Notes</h3>
-                  </div>
-                  <div className="flex space-x-2">
-                    {!isEditingNotes ? (
-                      <button
-                        onClick={() => setIsEditingNotes(true)}
-                        className="flex items-center space-x-1 px-3 py-1 bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors"
-                      >
-                        <MdEdit size={18} />
-                        <span>Edit</span>
-                      </button>
-                    ) : (
-                      <>
-                        <button
-                          onClick={handleSaveNotes}
-                          className="px-3 py-1 bg-green-600 rounded-lg hover:bg-green-700 transition-colors"
-                        >
-                          Save
-                        </button>
-                        <button
-                          onClick={() => setIsEditingNotes(false)}
-                          className="px-3 py-1 bg-gray-600 rounded-lg hover:bg-gray-700 transition-colors"
-                        >
-                          Cancel
-                        </button>
-                      </>
-                    )}
-                    {savedNotes[currentLesson.id] && (
-                      <button
-                        onClick={handleDeleteNotes}
-                        className="flex items-center space-x-1 px-3 py-1 bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
-                      >
-                        <MdDelete size={18} />
-                        <span>Reset</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
-                {isEditingNotes ? (
-                  <textarea
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    className="w-full h-40 px-4 py-3 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                    placeholder="Add your notes here..."
-                  />
-                ) : (
-                  <div className="prose prose-invert max-w-none">
-                    <p className="whitespace-pre-wrap">
-                      {notes || "No notes available for this lesson."}
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         </div>
 
-        {/* Course Content Section */}
-        <div className="lg:col-span-1 bg-gray-800 overflow-y-auto">
-          <div className="p-4">
-            <h2 className="text-xl font-bold mb-4">{course.title}</h2>
-            <div className="space-y-2">
-              {course.sections.map((section, sectionIndex) => (
-                <div
-                  key={sectionIndex}
-                  className="border border-gray-700 rounded-lg overflow-hidden transition-all duration-300"
-                >
-                  <button
-                    className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-gray-700 transition-colors"
-                    onClick={() => toggleSection(sectionIndex)}
-                  >
-                    <span className="font-medium">{section.title}</span>
-                    <MdChevronRight
-                      size={24}
-                      className={`transform transition-transform duration-300 ${
-                        expandedSections.has(sectionIndex) ? "rotate-90" : ""
-                      }`}
-                    />
-                  </button>
+        {/* Sidebar Module List */}
+        <div className="lg:col-span-1 bg-gray-800 border-l border-gray-700/50">
+          <div className="h-full flex flex-col">
+            <h2
+              className="text-xl font-bold p-4 px-6 text-white border-b border-gray-700/50 flex-shrink-0 
+              bg-gray-800/95 backdrop-blur-sm sticky top-0 z-10"
+            >
+              Course Content
+            </h2>
+            <div className="flex-1 overflow-y-auto custom-scrollbar">
+              <div className="p-4 space-y-2">
+                {course.modules.map((module, moduleIndex) => (
                   <div
-                    className={`transition-all duration-300 ease-in-out ${
-                      expandedSections.has(sectionIndex)
-                        ? "max-h-[1000px] opacity-100"
-                        : "max-h-0 opacity-0"
-                    } overflow-hidden`}
+                    key={module._id}
+                    className="rounded-lg overflow-hidden bg-gray-750/30 transition-all duration-300"
                   >
-                    {section.lessons.map((lesson) => (
-                      <button
-                        key={lesson.id}
-                        onClick={() => selectLesson(lesson)}
-                        className={`w-full flex items-center p-3 text-left text-sm transition-all duration-200 ${
-                          currentLesson?.id === lesson.id
-                            ? "bg-purple-600"
-                            : "hover:bg-gray-700"
+                    <button
+                      onClick={() => handleModuleChange(moduleIndex)}
+                      className={`w-full flex items-center p-3 text-left transition-all duration-200 
+                        ${
+                          currentModuleIndex === moduleIndex
+                            ? "bg-blue-500/10"
+                            : "hover:bg-gray-700/30"
                         }`}
-                      >
+                    >
+                      <div className="flex items-center w-full">
                         <div className="flex-shrink-0 mr-3">
-                          {lesson.completed ? (
-                            <MdCheck className="text-green-400" size={20} />
-                          ) : (
-                            <MdPlayCircle className="text-gray-400" size={20} />
-                          )}
-                        </div>
-                        <div className="flex-grow">
-                          <div className="font-medium">{lesson.title}</div>
-                          <div className="text-gray-400 text-xs mt-1">
-                            {lesson.duration}
+                          <div
+                            className={`w-8 h-8 rounded-lg flex items-center justify-center
+                            ${
+                              moduleIndex <= currentModuleIndex
+                                ? "bg-blue-500/10"
+                                : "bg-gray-700/50"
+                            }`}
+                          >
+                            {moduleIndex <= currentModuleIndex ? (
+                              <MdCheck className="text-blue-500" size={18} />
+                            ) : (
+                              <span className="text-gray-400 text-sm font-medium">
+                                {moduleIndex + 1}
+                              </span>
+                            )}
                           </div>
                         </div>
-                      </button>
-                    ))}
+                        <div className="flex-grow min-w-0 mr-2">
+                          <div className="flex items-center justify-between">
+                            <span
+                              className={`font-medium truncate ${
+                                currentModuleIndex === moduleIndex
+                                  ? "text-blue-100"
+                                  : "text-gray-300"
+                              }`}
+                            >
+                              {module.title}
+                            </span>
+                            <span className="text-xs text-gray-500 ml-2">
+                              {module.resources?.length || 0} videos
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={(e) => toggleModuleExpansion(moduleIndex, e)}
+                          className={`p-1.5 rounded-lg transition-colors ${
+                            expandedModules.has(moduleIndex)
+                              ? "bg-blue-500/10 text-blue-400"
+                              : "text-gray-400 hover:bg-gray-700/50"
+                          }`}
+                        >
+                          {expandedModules.has(moduleIndex) ? (
+                            <MdExpandLess size={20} />
+                          ) : (
+                            <MdExpandMore size={20} />
+                          )}
+                        </button>
+                      </div>
+                    </button>
+
+                    {/* Module Videos List with smooth height transition */}
+                    <div
+                      className={`overflow-hidden transition-all duration-300 
+                      ${
+                        expandedModules.has(moduleIndex)
+                          ? "max-h-[1000px] opacity-100"
+                          : "max-h-0 opacity-0"
+                      }`}
+                    >
+                      <div className="py-1 pl-[52px] border-l-2 border-gray-700/50">
+                        {module.resources?.map((resource, resourceIndex) => (
+                          <button
+                            key={resourceIndex}
+                            onClick={() =>
+                              handleResourceChange(moduleIndex, resourceIndex)
+                            }
+                            className={`w-full flex items-center pl-4 pr-3 py-2 text-left 
+                              transition-all duration-200
+                              ${
+                                currentModuleIndex === moduleIndex &&
+                                currentResourceIndex === resourceIndex
+                                  ? "bg-blue-500/10 border-l-2 border-blue-400 -ml-[2px]"
+                                  : "hover:bg-gray-700/30"
+                              }`}
+                          >
+                            <div className="flex items-center w-full min-w-0">
+                              <div
+                                className={`flex-shrink-0 w-6 h-6 rounded flex items-center justify-center mr-3
+                                ${
+                                  currentModuleIndex === moduleIndex &&
+                                  currentResourceIndex === resourceIndex
+                                    ? "text-blue-400"
+                                    : "text-gray-400"
+                                }`}
+                              >
+                                {resource.type === "video" ? (
+                                  <MdOndemandVideo size={16} />
+                                ) : (
+                                  <MdArticle size={16} />
+                                )}
+                              </div>
+                              <div className="flex-grow min-w-0">
+                                <span
+                                  className={`text-sm truncate block ${
+                                    currentModuleIndex === moduleIndex &&
+                                    currentResourceIndex === resourceIndex
+                                      ? "text-blue-100"
+                                      : "text-gray-400"
+                                  }`}
+                                >
+                                  {resource.title}
+                                </span>
+                              </div>
+                              <div className="flex-shrink-0 ml-2">
+                                <span className="text-xs text-gray-600">
+                                  {resourceIndex + 1}/{module.resources.length}
+                                </span>
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
         </div>

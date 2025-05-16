@@ -69,6 +69,8 @@ const getCourseById = async (req, res) => {
       return res.status(404).json({ message: "Course not found" });
     }
 
+    // Resources are already embedded in the modules, no need to populate
+    console.log("Course data:", JSON.stringify(course, null, 2));
     res.json(course);
   } catch (error) {
     res
@@ -93,11 +95,22 @@ const updateCourse = async (req, res) => {
         .json({ message: "Not authorized to update this course" });
     }
 
+    // If updating modules, validate the resources
+    if (req.body.modules) {
+      req.body.modules = req.body.modules.map((module) => ({
+        ...module,
+        resources: module.resources || [],
+      }));
+    }
+
     const updatedCourse = await Course.findByIdAndUpdate(
       req.params.id,
       { $set: req.body },
       { new: true }
-    ).populate("instructor", "name email");
+    )
+      .populate("instructor", "name email")
+      .populate("students", "name email")
+      .populate("assignments");
 
     res.json(updatedCourse);
   } catch (error) {

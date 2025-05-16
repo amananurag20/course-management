@@ -62,4 +62,26 @@ export const courseService = {
     const response = await api.put(`/courses/${courseId}`, courseData);
     return response.data;
   },
+
+  // Update course modules with resources
+  updateCourseModules: async (courseId, modules) => {
+    // Map each module to include a video resource
+    const updatedModules = modules.map((module) => ({
+      _id: module._id,
+      title: module.title,
+      content: module.content,
+      resources: [
+        {
+          title: `${module.title} Video`,
+          type: "video",
+          url: "https://www.youtube.com/watch?v=SSu00IRRraY", // Default video for testing
+        },
+      ],
+    }));
+
+    const response = await api.put(`/courses/${courseId}`, {
+      modules: updatedModules,
+    });
+    return response.data;
+  },
 };

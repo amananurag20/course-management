@@ -12,13 +12,13 @@ import {
 } from "react-icons/md";
 import { SidebarContext } from "../context/SidebarContext";
 import { courseService } from "../services/courseService";
-import { useSelector } from "react-redux";
 
-const CourseCard = ({ course, isEnrolled, onEnroll }) => (
+const CourseCard = ({ course, isEnrolled, onEnroll, onNavigate }) => (
   <div
     className={`bg-gray-800 rounded-xl overflow-hidden transition-all duration-300 hover:transform hover:scale-[1.02] ${
       isEnrolled ? "cursor-pointer hover:shadow-lg" : ""
     }`}
+    onClick={() => isEnrolled && onNavigate(course._id)}
   >
     {/* Course Image */}
     <div className="relative h-48">
@@ -83,7 +83,6 @@ const CourseCard = ({ course, isEnrolled, onEnroll }) => (
 const Courses = () => {
   const navigate = useNavigate();
   const { isGlobalSidebarOpen } = useContext(SidebarContext);
-  const { user } = useSelector((state) => state.auth);
   const globalSidebarWidth = isGlobalSidebarOpen ? 250 : 0;
 
   const [courses, setCourses] = useState([]);
@@ -141,12 +140,6 @@ const Courses = () => {
 
     return matchesSearch && matchesLevel && matchesEnrollment;
   });
-
-  const handleCourseClick = (course) => {
-    if (enrolledCourseIds.has(course._id)) {
-      navigate(`/courses/${course._id}`);
-    }
-  };
 
   if (loading) {
     return (
@@ -233,6 +226,7 @@ const Courses = () => {
               course={course}
               isEnrolled={enrolledCourseIds.has(course._id)}
               onEnroll={handleEnroll}
+              onNavigate={(courseId) => navigate(`/courses/${courseId}`)}
             />
           ))}
         </div>

@@ -1,5 +1,35 @@
 const mongoose = require("mongoose");
 
+// Define a separate schema for resources
+const resourceSchema = new mongoose.Schema({
+  title: {
+    type: String,
+    required: true,
+  },
+  type: {
+    type: String,
+    required: true,
+    enum: ["video", "article", "document"],
+  },
+  url: {
+    type: String,
+    required: true,
+  },
+});
+
+// Define a separate schema for modules
+const moduleSchema = new mongoose.Schema({
+  title: {
+    type: String,
+    required: true,
+  },
+  content: {
+    type: String,
+    required: true,
+  },
+  resources: [resourceSchema],
+});
+
 const courseSchema = new mongoose.Schema(
   {
     title: {
@@ -32,19 +62,7 @@ const courseSchema = new mongoose.Schema(
         ref: "Assignment",
       },
     ],
-    modules: [
-      {
-        title: String,
-        content: String,
-        resources: [
-          {
-            title: String,
-            type: String,
-            url: String,
-          },
-        ],
-      },
-    ],
+    modules: [moduleSchema],
     startDate: {
       type: Date,
       required: true,

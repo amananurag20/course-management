@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { courseService } from "../services/courseService";
 import { userActivityService } from "../services/userActivityService";
 import { useSelector } from "react-redux";
-import { MdCheck } from "react-icons/md";
+import { MdCheck, MdChevronLeft, MdChevronRight } from "react-icons/md";
 
 function Dashboard({ isSidebarCollapsed }) {
   const navigate = useNavigate();
@@ -303,18 +303,20 @@ function Dashboard({ isSidebarCollapsed }) {
                   </h2>
                   <p className="text-sm text-gray-400">{currentYear}</p>
                 </div>
-                <div className="flex space-x-2">
+                <div className="flex gap-2">
                   <button
                     onClick={handlePrevMonth}
-                    className="p-2 hover:bg-gray-600 rounded-lg transition-colors"
+                    className="p-2 hover:bg-gray-600/50 rounded-lg transition-colors flex items-center justify-center text-gray-400 hover:text-white"
+                    aria-label="Previous month"
                   >
-                    <span className="text-gray-400">◀</span>
+                    <MdChevronLeft size={24} />
                   </button>
                   <button
                     onClick={handleNextMonth}
-                    className="p-2 hover:bg-gray-600 rounded-lg transition-colors"
+                    className="p-2 hover:bg-gray-600/50 rounded-lg transition-colors flex items-center justify-center text-gray-400 hover:text-white"
+                    aria-label="Next month"
                   >
-                    <span className="text-gray-400">▶</span>
+                    <MdChevronRight size={24} />
                   </button>
                 </div>
               </div>
