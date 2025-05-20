@@ -1,9 +1,8 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSidebar } from "../context/SidebarContext";
-import codingQuestions from "../constants/codingQuestions";
-import mcqQuestions from "../constants/mcqQuestions";
 import { MdCode, MdQuiz, MdSearch, MdCheck, MdSort } from "react-icons/md";
+import { problemService } from "../services/problemService";
 
 const Practice = () => {
   const { isGlobalSidebarOpen } = useSidebar();
@@ -12,56 +11,106 @@ const Practice = () => {
   const [selectedTopic, setSelectedTopic] = useState("all");
   const [selectedDifficulty, setSelectedDifficulty] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [sortBy, setSortBy] = useState("id"); // 'id', 'difficulty'
+  const [sortBy, setSortBy] = useState("id");
+  const [questions, setQuestions] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+
+  // Fetch questions when component mounts or tab changes
+  useEffect(() => {
+    const fetchQuestions = async () => {
+      try {
+        setLoading(true);
+        const response = await problemService.getAllProblems();
+        console.log("API Response:", response); // Debug log
+
+        // Handle both array and object response formats
+        const problems = Array.isArray(response)
+          ? response
+          : response.problems || [];
+        console.log("Processed Problems:", problems); // Debug log
+
+        setQuestions(problems);
+        setTotalPages(response.totalPages || 1);
+        setCurrentPage(response.currentPage || 1);
+      } catch (err) {
+        console.error("Error fetching questions:", err);
+        setError(err.message || "Failed to fetch questions");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchQuestions();
+  }, [activeTab]);
 
   // Get unique topics from questions
   const topics = useMemo(() => {
-    const codingTopics = [...new Set(codingQuestions.map((q) => q.topic))];
-    const mcqTopics = [...new Set(mcqQuestions.map((q) => q.topic))];
-    return activeTab === "coding" ? codingTopics : mcqTopics;
-  }, [activeTab]);
+    const allTopics = questions.map((q) => q.topic || "Uncategorized");
+    console.log("Available Topics:", allTopics); // Debug log
+    return [...new Set(allTopics)];
+  }, [questions]);
 
-  // Get unique difficulties (only for coding questions)
-  const difficulties = useMemo(
-    () => [...new Set(codingQuestions.map((q) => q.difficulty))],
-    []
-  );
+  // Get unique difficulties
+  const difficulties = useMemo(() => {
+    const allDifficulties = questions.map(
+      (q) => q.difficulty?.toLowerCase() || "medium"
+    );
+    console.log("Available Difficulties:", allDifficulties); // Debug log
+    return [...new Set(allDifficulties)];
+  }, [questions]);
 
   // Filter and sort questions based on selected filters
   const filteredQuestions = useMemo(() => {
-    const questions = activeTab === "coding" ? codingQuestions : mcqQuestions;
+    console.log("Current Filters:", {
+      selectedTopic,
+      selectedDifficulty,
+      searchQuery,
+      sortBy,
+    }); // Debug log
 
-    return questions
+    const filtered = questions
       .filter((q) => {
-        const topicMatch = selectedTopic === "all" || q.topic === selectedTopic;
+        const topicMatch =
+          selectedTopic === "all" ||
+          (q.topic || "Uncategorized") === selectedTopic;
         const difficultyMatch =
-          activeTab === "mcq" ||
           selectedDifficulty === "all" ||
-          q.difficulty === selectedDifficulty;
+          (q.difficulty?.toLowerCase() || "medium") ===
+            selectedDifficulty.toLowerCase();
         const searchMatch =
           searchQuery === "" ||
-          (q.title || q.question)
-            .toLowerCase()
-            .includes(searchQuery.toLowerCase()) ||
-          q.topic.toLowerCase().includes(searchQuery.toLowerCase());
+          q.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          (q.topic || "").toLowerCase().includes(searchQuery.toLowerCase());
 
         return topicMatch && difficultyMatch && searchMatch;
       })
       .sort((a, b) => {
         if (sortBy === "difficulty") {
-          const difficultyOrder = { Easy: 1, Medium: 2, Hard: 3 };
-          return difficultyOrder[a.difficulty] - difficultyOrder[b.difficulty];
+          const difficultyOrder = { easy: 1, medium: 2, hard: 3 };
+          return (
+            difficultyOrder[a.difficulty?.toLowerCase() || "medium"] -
+            difficultyOrder[b.difficulty?.toLowerCase() || "medium"]
+          );
         }
-        return a.id - b.id;
+        return a._id.localeCompare(b._id);
       });
-  }, [activeTab, selectedTopic, selectedDifficulty, searchQuery, sortBy]);
+
+    console.log("Filtered Questions:", filtered); // Debug log
+    return filtered;
+  }, [questions, selectedTopic, selectedDifficulty, searchQuery, sortBy]);
+
+  // Reset filters when tab changes
+  useEffect(() => {
+    setSelectedTopic("all");
+    setSelectedDifficulty("all");
+    setSearchQuery("");
+  }, [activeTab]);
 
   const handleQuestionClick = (question) => {
-    if (activeTab === "coding") {
-      navigate(`/practice/coding/${question.id}`);
-    } else {
-      navigate(`/practice/mcq/${question.id}`);
-    }
+    navigate(`/practice/${question.type || "coding"}/${question._id}`);
   };
 
   const mainContentStyle = {
@@ -147,84 +196,133 @@ const Practice = () => {
               <option value="all">All Difficulties</option>
               {difficulties.map((difficulty) => (
                 <option key={difficulty} value={difficulty}>
-                  {difficulty}
+                  {difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}
                 </option>
               ))}
             </select>
           )}
+
+          <select
+            className="bg-gray-800 text-white px-4 py-2 rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-500"
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+          >
+            <option value="id">Sort by ID</option>
+            <option value="difficulty">Sort by Difficulty</option>
+          </select>
         </div>
 
         {/* Questions Table */}
         <div className="bg-gray-800 rounded-lg overflow-hidden">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-gray-700">
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                  Title
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                  Topic
-                </th>
-                {activeTab === "coding" && (
+          {loading ? (
+            <div className="flex justify-center items-center py-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500"></div>
+            </div>
+          ) : error ? (
+            <div className="text-center py-12 text-red-500">{error}</div>
+          ) : (
+            <table className="w-full">
+              <thead>
+                <tr className="bg-gray-700">
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                    Difficulty
+                    Status
                   </th>
-                )}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-700">
-              {filteredQuestions.map((question) => (
-                <tr
-                  key={question.id}
-                  onClick={() => handleQuestionClick(question)}
-                  className="hover:bg-gray-700 cursor-pointer transition-colors"
-                >
-                  <td className="px-6 py-4 whitespace-nowrap w-16">
-                    {question.completed ? (
-                      <MdCheck className="text-green-500" size={20} />
-                    ) : (
-                      <div className="w-5 h-5 border-2 border-gray-600 rounded-full" />
-                    )}
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-sm font-medium text-white">
-                      {question.title || question.question}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="px-3 py-1 bg-purple-900 text-purple-200 rounded-full text-xs">
-                      {question.topic}
-                    </span>
-                  </td>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                    Title
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                    Topic
+                  </th>
                   {activeTab === "coding" && (
-                    <td className="px-6 py-4">
-                      <span
-                        className={`px-3 py-1 rounded-full text-xs ${
-                          question.difficulty === "Easy"
-                            ? "bg-green-900 text-green-200"
-                            : question.difficulty === "Medium"
-                            ? "bg-yellow-900 text-yellow-200"
-                            : "bg-red-900 text-red-200"
-                        }`}
-                      >
-                        {question.difficulty}
-                      </span>
-                    </td>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                      Difficulty
+                    </th>
                   )}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-gray-700">
+                {filteredQuestions.map((question) => (
+                  <tr
+                    key={question._id}
+                    onClick={() => handleQuestionClick(question)}
+                    className="hover:bg-gray-700 cursor-pointer transition-colors"
+                  >
+                    <td className="px-6 py-4 whitespace-nowrap w-16">
+                      {question.completed ? (
+                        <MdCheck className="text-green-500" size={20} />
+                      ) : (
+                        <div className="w-5 h-5 border-2 border-gray-600 rounded-full" />
+                      )}
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-sm font-medium text-white">
+                        {question.title}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="px-3 py-1 bg-purple-900 text-purple-200 rounded-full text-xs">
+                        {question.topic || "Uncategorized"}
+                      </span>
+                    </td>
+                    {activeTab === "coding" && (
+                      <td className="px-6 py-4">
+                        <span
+                          className={`px-3 py-1 rounded-full text-xs ${
+                            (question.difficulty?.toLowerCase() || "medium") ===
+                            "easy"
+                              ? "bg-green-900 text-green-200"
+                              : (question.difficulty?.toLowerCase() ||
+                                  "medium") === "medium"
+                              ? "bg-yellow-900 text-yellow-200"
+                              : "bg-red-900 text-red-200"
+                          }`}
+                        >
+                          {question.difficulty?.charAt(0).toUpperCase() +
+                            question.difficulty?.slice(1) || "Medium"}
+                        </span>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
 
-        {filteredQuestions.length === 0 && (
-          <div className="text-center py-12 text-gray-400">
-            No questions found matching your criteria.
-          </div>
-        )}
+          {!loading && !error && filteredQuestions.length === 0 && (
+            <div className="text-center py-12 text-gray-400">
+              No questions found matching your criteria.
+            </div>
+          )}
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex justify-center items-center py-4 border-t border-gray-700">
+              <div className="flex gap-2">
+                <button
+                  onClick={() =>
+                    setCurrentPage((prev) => Math.max(prev - 1, 1))
+                  }
+                  disabled={currentPage === 1}
+                  className="px-3 py-1 rounded bg-gray-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Previous
+                </button>
+                <span className="px-3 py-1 text-gray-300">
+                  Page {currentPage} of {totalPages}
+                </span>
+                <button
+                  onClick={() =>
+                    setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+                  }
+                  disabled={currentPage === totalPages}
+                  className="px-3 py-1 rounded bg-gray-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

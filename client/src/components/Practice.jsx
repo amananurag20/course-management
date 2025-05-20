@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   MdCode,
   MdChevronRight,
@@ -12,6 +12,7 @@ import { useSidebar } from "../context/SidebarContext";
 import { useNavigate, useParams } from "react-router-dom";
 import PracticeQuestions from "./PracticeQuestions";
 import CodingQuestion from "./CodingQuestion";
+import { problemService } from "../services/problemService";
 
 const practiceCategories = {
   javascript: {
@@ -131,11 +132,34 @@ const practiceCategories = {
 function Practice() {
   const { isGlobalSidebarOpen } = useSidebar();
   const navigate = useNavigate();
-  const { sectionId } = useParams();
+  const { sectionId, problemId } = useParams();
   const [selectedCategory, setSelectedCategory] = useState("javascript");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSection, setSelectedSection] = useState(null);
   const [selectedProblem, setSelectedProblem] = useState(null);
+  const [problems, setProblems] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  // Fetch problems when component mounts
+  useEffect(() => {
+    const fetchProblems = async () => {
+      console.log("hiiiiiii");
+      try {
+        setLoading(true);
+        const data = await problemService.getAllProblems();
+        console.log("Fetched problems:", data); // Debug log
+        setProblems(data);
+      } catch (err) {
+        console.error("Error fetching problems:", err); // Debug log
+        setError(err.message || "Failed to fetch problems");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProblems();
+  }, []);
 
   // Find current section if sectionId exists
   const currentSection =
@@ -143,6 +167,13 @@ function Practice() {
     Object.values(practiceCategories)
       .flatMap((category) => category.sections)
       .find((section) => section.title === sectionId);
+
+  // Filter problems by section and type
+  const sectionProblems = problems.filter(
+    (problem) =>
+      problem.topic.toLowerCase() === selectedCategory.toLowerCase() &&
+      problem.type === "coding"
+  );
 
   const filteredSections = practiceCategories[selectedCategory].sections.filter(
     (section) => section.title.toLowerCase().includes(searchQuery.toLowerCase())
@@ -159,7 +190,7 @@ function Practice() {
 
   // Handle problem selection
   const handleProblemSelect = (problem) => {
-    navigate(`/practice/${encodeURIComponent(sectionId)}/${problem.id}`);
+    navigate(`/practice/${encodeURIComponent(sectionId)}/${problem._id}`);
   };
 
   // Handle back navigation
@@ -197,30 +228,71 @@ function Practice() {
 
           {/* Problem List */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {currentSection.problems.map((problem) => (
-              <div
-                key={problem.id}
-                className="bg-gray-800 rounded-xl p-6 hover:bg-gray-700 hover:shadow-lg transition-all duration-300 hover:transform hover:scale-[1.02] cursor-pointer"
-                onClick={() => handleProblemSelect(problem)}
-              >
-                <h3 className="text-xl font-semibold mb-2">{problem.title}</h3>
-                <span
-                  className={`px-3 py-1 rounded-full text-sm font-medium 
-                  ${
-                    problem.difficulty === "Easy"
-                      ? "bg-green-500/20 text-green-400"
-                      : problem.difficulty === "Medium"
-                      ? "bg-yellow-500/20 text-yellow-400"
-                      : "bg-red-500/20 text-red-400"
-                  }`}
-                >
-                  {problem.difficulty}
-                </span>
+            {loading ? (
+              <div className="col-span-full text-center py-8">
+                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500 mx-auto"></div>
               </div>
-            ))}
+            ) : error ? (
+              <div className="col-span-full text-center py-8 text-red-500">
+                {error}
+              </div>
+            ) : sectionProblems.length === 0 ? (
+              <div className="col-span-full text-center py-8 text-gray-400">
+                No problems found for this section
+              </div>
+            ) : (
+              sectionProblems.map((problem) => (
+                <div
+                  key={problem._id}
+                  className="bg-gray-800 rounded-xl p-6 hover:bg-gray-700 hover:shadow-lg transition-all duration-300 hover:transform hover:scale-[1.02] cursor-pointer"
+                  onClick={() => handleProblemSelect(problem)}
+                >
+                  <h3 className="text-xl font-semibold mb-2">
+                    {problem.title}
+                  </h3>
+                  <span
+                    className={`px-3 py-1 rounded-full text-sm font-medium 
+                    ${
+                      problem.difficulty === "Easy"
+                        ? "bg-green-500/20 text-green-400"
+                        : problem.difficulty === "Medium"
+                        ? "bg-yellow-500/20 text-yellow-400"
+                        : "bg-red-500/20 text-red-400"
+                    }`}
+                  >
+                    {problem.difficulty}
+                  </span>
+                  <p className="text-gray-400 mt-2">{problem.description}</p>
+                  <div className="mt-4 flex items-center justify-between">
+                    <span className="text-sm text-gray-500">
+                      Time Limit: {problem.timeLimit}s
+                    </span>
+                    <button
+                      className="p-2 hover:bg-gray-700 rounded-full transition-colors"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleProblemSelect(problem);
+                      }}
+                    >
+                      <MdChevronRight className="text-2xl text-purple-500" />
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>
+    );
+  }
+
+  // If we're viewing a specific problem
+  if (problemId) {
+    return (
+      <CodingQuestion
+        problemId={problemId}
+        onBack={() => navigate(`/practice/${encodeURIComponent(sectionId)}`)}
+      />
     );
   }
 

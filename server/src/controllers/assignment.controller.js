@@ -14,11 +14,9 @@ const createAssignment = async (req, res) => {
     }
 
     if (course.instructor.toString() !== req.user.userId) {
-      return res
-        .status(403)
-        .json({
-          message: "Not authorized to create assignments for this course",
-        });
+      return res.status(403).json({
+        message: "Not authorized to create assignments for this course",
+      });
     }
 
     const assignment = new Assignment({
@@ -60,13 +58,47 @@ const getCourseAssignments = async (req, res) => {
   }
 };
 
+// Get single assignment by ID
+const getAssignmentById = async (req, res) => {
+  try {
+    const assignment = await Assignment.findById(req.params.id)
+      .populate("submissions.student", "name email")
+      .populate("course", "title instructor");
+
+    if (!assignment) {
+      return res.status(404).json({ message: "Assignment not found" });
+    }
+
+    // Check if user is enrolled in the course or is the instructor
+    const course = await Course.findById(assignment.course);
+    if (!course) {
+      return res.status(404).json({ message: "Course not found" });
+    }
+
+    const isEnrolled = course.students.includes(req.user.userId);
+    const isInstructor = course.instructor.toString() === req.user.userId;
+
+    if (!isEnrolled && !isInstructor) {
+      return res
+        .status(403)
+        .json({ message: "Not authorized to view this assignment" });
+    }
+
+    res.json(assignment);
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Error fetching assignment", error: error.message });
+  }
+};
+
 // Submit assignment
 const submitAssignment = async (req, res) => {
   try {
-    const { assignmentId } = req.params;
-    const { content, attachments } = req.body;
+    const { id } = req.params;
+    const { content } = req.body;
 
-    const assignment = await Assignment.findById(assignmentId);
+    const assignment = await Assignment.findById(id);
     if (!assignment) {
       return res.status(404).json({ message: "Assignment not found" });
     }
@@ -105,7 +137,6 @@ const submitAssignment = async (req, res) => {
     assignment.submissions.push({
       student: req.user.userId,
       content,
-      attachments,
     });
 
     await assignment.save();
@@ -117,13 +148,13 @@ const submitAssignment = async (req, res) => {
   }
 };
 
-// Grade assignment submission
-const gradeSubmission = async (req, res) => {
+// Grade assignment
+const gradeAssignment = async (req, res) => {
   try {
-    const { assignmentId, submissionId } = req.params;
+    const { id } = req.params;
     const { grade, feedback } = req.body;
 
-    const assignment = await Assignment.findById(assignmentId);
+    const assignment = await Assignment.findById(id);
     if (!assignment) {
       return res.status(404).json({ message: "Assignment not found" });
     }
@@ -136,7 +167,10 @@ const gradeSubmission = async (req, res) => {
         .json({ message: "Not authorized to grade submissions" });
     }
 
-    const submission = assignment.submissions.id(submissionId);
+    const submission = assignment.submissions.find(
+      (sub) => sub.student.toString() === req.body.studentId
+    );
+
     if (!submission) {
       return res.status(404).json({ message: "Submission not found" });
     }
@@ -145,17 +179,18 @@ const gradeSubmission = async (req, res) => {
     submission.feedback = feedback;
     await assignment.save();
 
-    res.json({ message: "Submission graded successfully" });
+    res.json({ message: "Assignment graded successfully" });
   } catch (error) {
     res
       .status(500)
-      .json({ message: "Error grading submission", error: error.message });
+      .json({ message: "Error grading assignment", error: error.message });
   }
 };
 
 module.exports = {
   createAssignment,
   getCourseAssignments,
+  getAssignmentById,
   submitAssignment,
-  gradeSubmission,
+  gradeAssignment,
 };

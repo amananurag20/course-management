@@ -16,9 +16,14 @@ import { VscDebugConsole } from "react-icons/vsc";
 import Editor from "@monaco-editor/react";
 import { useSidebar } from "../context/SidebarContext";
 import { useParams, useNavigate } from "react-router-dom";
-import codingQuestions from "../constants/codingQuestions";
 import Timer from "./Timer";
 import TimeUpModal from "./TimeUpModal";
+import { problemService } from "../services/problemService";
+import { submissionService } from "../services/submissionService";
+import ReactMarkdown from "react-markdown";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
+import remarkGfm from "remark-gfm";
 
 function CodingQuestion() {
   const { isGlobalSidebarOpen } = useSidebar();
@@ -32,6 +37,10 @@ function CodingQuestion() {
   const [isDragging, setIsDragging] = useState(false);
   const [showTimeUpModal, setShowTimeUpModal] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [question, setQuestion] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [submissions, setSubmissions] = useState([]);
 
   // Tab state
   const [activeTab, setActiveTab] = useState("description");
@@ -39,11 +48,57 @@ function CodingQuestion() {
 
   // Execution state
   const [testResults, setTestResults] = useState(null);
-  const [executionStatus, setExecutionStatus] = useState(null);
-  const [consoleOutput, setConsoleOutput] = useState([]);
+  const [isExecuting, setIsExecuting] = useState(false);
   const [customInput, setCustomInput] = useState("");
+  const [consoleOutput, setConsoleOutput] = useState([]);
 
-  const question = codingQuestions.find((q) => q.id === parseInt(id));
+  // Add new state for panel height
+  const [panelHeight, setPanelHeight] = useState(200);
+  const [isDraggingPanel, setIsDraggingPanel] = useState(false);
+
+  // Fetch question data and submissions when component mounts
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const [questionData, submissionsData] = await Promise.all([
+          problemService.getProblemById(id),
+          submissionService.getSubmissionHistory(id),
+        ]);
+        setQuestion(questionData);
+        setSubmissions(submissionsData);
+
+        // Set default code based on the selected language's userSnippet
+        if (questionData.codeStubs && questionData.codeStubs.length > 0) {
+          const defaultStub = questionData.codeStubs.find(
+            (stub) => stub.language.toUpperCase() === language.toUpperCase()
+          );
+          if (defaultStub) {
+            setCode(defaultStub.userSnippet);
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching data:", err);
+        setError(err.message || "Failed to fetch data");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [id]);
+
+  // Update code when language changes
+  useEffect(() => {
+    if (question?.codeStubs) {
+      const newStub = question.codeStubs.find(
+        (stub) => stub.language.toUpperCase() === language.toUpperCase()
+      );
+      if (newStub) {
+        setCode(newStub.userSnippet);
+      }
+    }
+  }, [language, question]);
 
   const languages = [
     { id: "javascript", name: "JavaScript" },
@@ -53,22 +108,18 @@ function CodingQuestion() {
   ];
 
   const getDefaultCode = (lang) => {
-    switch (lang) {
-      case "javascript":
-        return "// Write your JavaScript code here\n\nfunction solution() {\n  \n}";
-      case "python":
-        return "# Write your Python code here\n\ndef solution():\n    pass";
-      case "java":
-        return "public class Solution {\n    public static void main(String[] args) {\n        \n    }\n}";
-      case "cpp":
-        return "#include <iostream>\n\nusing namespace std;\n\nint main() {\n    \n    return 0;\n}";
-      default:
-        return "// Write your code here";
+    if (question?.codeStubs) {
+      const stub = question.codeStubs.find(
+        (s) => s.language.toUpperCase() === lang.toUpperCase()
+      );
+      if (stub) {
+        return stub.userSnippet;
+      }
     }
+    return "// Write your code here";
   };
 
   const mockExecuteCode = (code, input) => {
-    setExecutionStatus("Running...");
     setConsoleOutput([]);
 
     return new Promise((resolve) => {
@@ -111,47 +162,57 @@ function CodingQuestion() {
   const handleRunCode = async () => {
     if (!question || !question.testCases) return;
 
-    const results = {
-      passed: 0,
-      total: question.testCases.length,
-      cases: [],
-      time: 0,
-      memory: 0,
-    };
+    setIsExecuting(true);
+    setTestResults(null);
 
-    for (const testCase of question.testCases) {
-      const result = await mockExecuteCode(
-        code || getDefaultCode(language),
-        testCase.input
-      );
+    try {
+      // For JavaScript, ensure the code is a function
+      let processedCode = code;
+      if (language === "javascript") {
+        // If the code doesn't start with 'function', wrap it in a function
+        if (!code.trim().startsWith("function")) {
+          processedCode = `function solution(input) {\n${code}\n}`;
+        }
+      }
 
-      if (result.success) {
-        const passed = result.output === testCase.expectedOutput;
-        results.cases.push({
-          passed,
-          input: testCase.input,
-          output: result.output,
-          expected: testCase.expectedOutput,
-          time: result.time,
-          memory: result.memory,
-        });
-        if (passed) results.passed++;
-        results.time = Math.max(results.time, result.time);
-        results.memory = Math.max(results.memory, result.memory);
-      } else {
-        results.cases.push({
-          passed: false,
-          input: testCase.input,
-          error: result.error,
-          expected: testCase.expectedOutput,
+      const results = await submissionService.executeCode({
+        code: processedCode,
+        language,
+        problemId: question._id,
+        testCases: question.testCases,
+      });
+
+      // Ensure we have valid results
+      if (results && typeof results === "object") {
+        setTestResults({
+          ...results,
+          cases: results.cases.map((testCase) => ({
+            ...testCase,
+            input: testCase.input || "",
+            output: testCase.output || "",
+            expected: testCase.expected || "",
+            error: testCase.error || null,
+            time: testCase.time || 0,
+          })),
         });
       }
+    } catch (error) {
+      console.error("Code execution error:", error);
+      setTestResults({
+        passed: 0,
+        total: question.testCases.length,
+        cases: question.testCases.map((testCase) => ({
+          passed: false,
+          input: testCase.input,
+          error: error.message || "Execution failed",
+          expected: testCase.output,
+          time: 0,
+          memory: 0,
+        })),
+      });
+    } finally {
+      setIsExecuting(false);
     }
-
-    setTestResults(results);
-    setExecutionStatus(
-      results.passed === results.total ? "Accepted" : "Wrong Answer"
-    );
   };
 
   const handleSubmit = async () => {
@@ -193,6 +254,47 @@ function CodingQuestion() {
     }, 1500);
   };
 
+  // Add panel drag handlers
+  const handlePanelDragStart = (e) => {
+    e.preventDefault();
+    setIsDraggingPanel(true);
+  };
+
+  useEffect(() => {
+    const handlePanelDrag = (e) => {
+      if (!isDraggingPanel) return;
+
+      const container = document.getElementById("coding-container");
+      if (!container) return;
+
+      const containerRect = container.getBoundingClientRect();
+      const mouseY = e.clientY;
+      const containerHeight = containerRect.height;
+      const newHeight = containerHeight - (mouseY - containerRect.top);
+
+      // Limit panel height between 100px and 80% of container height
+      const minHeight = 100;
+      const maxHeight = containerHeight * 0.8;
+      const clampedHeight = Math.min(Math.max(newHeight, minHeight), maxHeight);
+
+      setPanelHeight(clampedHeight);
+    };
+
+    const handlePanelDragEnd = () => {
+      setIsDraggingPanel(false);
+    };
+
+    if (isDraggingPanel) {
+      document.addEventListener("mousemove", handlePanelDrag);
+      document.addEventListener("mouseup", handlePanelDragEnd);
+    }
+
+    return () => {
+      document.removeEventListener("mousemove", handlePanelDrag);
+      document.removeEventListener("mouseup", handlePanelDragEnd);
+    };
+  }, [isDraggingPanel]);
+
   useEffect(() => {
     const handleMouseMove = (e) => {
       if (!isDragging) return;
@@ -227,6 +329,37 @@ function CodingQuestion() {
       document.removeEventListener("mouseup", handleMouseUp);
     };
   }, [isDragging, isGlobalSidebarOpen]);
+
+  if (loading) {
+    return (
+      <div
+        style={{ marginLeft: isGlobalSidebarOpen ? "16rem" : "5rem" }}
+        className="min-h-screen bg-gray-900 text-white p-8 flex items-center justify-center"
+      >
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div
+        style={{ marginLeft: isGlobalSidebarOpen ? "16rem" : "5rem" }}
+        className="min-h-screen bg-gray-900 text-white p-8 flex items-center justify-center"
+      >
+        <div className="text-center">
+          <h2 className="text-2xl font-bold mb-4 text-red-500">{error}</h2>
+          <button
+            onClick={() => navigate("/practice")}
+            className="text-purple-400 hover:text-purple-300 flex items-center justify-center"
+          >
+            <MdArrowBack size={20} className="mr-2" />
+            Back to Practice
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (!question) {
     return (
@@ -339,79 +472,180 @@ function CodingQuestion() {
           <div className="py-4">
             {activeTab === "description" && (
               <div className="space-y-6 text-gray-300">
-                <div>
-                  <h2 className="text-lg font-semibold text-purple-400 mb-2">
-                    Description
-                  </h2>
-                  <p className="leading-relaxed">{question.description}</p>
+                <div className="markdown-body">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      code({ inline, className, children, ...props }) {
+                        const match = /language-(\w+)/.exec(className || "");
+                        return !inline && match ? (
+                          <SyntaxHighlighter
+                            style={vscDarkPlus}
+                            language={match[1]}
+                            PreTag="div"
+                            className="rounded-lg"
+                            {...props}
+                          >
+                            {String(children).replace(/\n$/, "")}
+                          </SyntaxHighlighter>
+                        ) : (
+                          <code
+                            className="bg-gray-800 px-1.5 py-0.5 rounded text-purple-300 font-mono text-sm"
+                            {...props}
+                          >
+                            {children}
+                          </code>
+                        );
+                      },
+                      h1: ({ children }) => (
+                        <h1 className="text-3xl font-bold text-purple-400 mt-6 mb-4">
+                          {children}
+                        </h1>
+                      ),
+                      h2: ({ children }) => (
+                        <h2 className="text-2xl font-bold text-purple-400 mt-5 mb-3">
+                          {children}
+                        </h2>
+                      ),
+                      h3: ({ children }) => (
+                        <h3 className="text-xl font-bold text-purple-400 mt-4 mb-2">
+                          {children}
+                        </h3>
+                      ),
+                      p: ({ children }) => (
+                        <p className="my-3 leading-7">{children}</p>
+                      ),
+                      ul: ({ children }) => (
+                        <ul className="list-disc pl-6 my-3 space-y-1">
+                          {children}
+                        </ul>
+                      ),
+                      ol: ({ children }) => (
+                        <ol className="list-decimal pl-6 my-3 space-y-1">
+                          {children}
+                        </ol>
+                      ),
+                      li: ({ children }) => (
+                        <li className="leading-7">{children}</li>
+                      ),
+                      blockquote: ({ children }) => (
+                        <blockquote className="border-l-4 border-purple-500 pl-4 my-4 italic text-gray-400">
+                          {children}
+                        </blockquote>
+                      ),
+                      a: ({ href, children }) => (
+                        <a
+                          href={href}
+                          className="text-purple-400 hover:text-purple-300 underline"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          {children}
+                        </a>
+                      ),
+                      table: ({ children }) => (
+                        <div className="overflow-x-auto my-4">
+                          <table className="min-w-full border-collapse border border-gray-700">
+                            {children}
+                          </table>
+                        </div>
+                      ),
+                      th: ({ children }) => (
+                        <th className="border border-gray-700 px-4 py-2 bg-gray-800 text-left">
+                          {children}
+                        </th>
+                      ),
+                      td: ({ children }) => (
+                        <td className="border border-gray-700 px-4 py-2">
+                          {children}
+                        </td>
+                      ),
+                    }}
+                  >
+                    {question.description}
+                  </ReactMarkdown>
                 </div>
 
-                <div className="bg-gray-800 rounded-lg p-4 shadow-md">
-                  <h2 className="text-lg font-semibold text-purple-400 mb-2">
-                    Example
-                  </h2>
-                  <pre className="font-mono text-sm whitespace-pre-wrap bg-gray-850 p-3 rounded border border-gray-700">
-                    {question.example}
-                  </pre>
-                </div>
+                {question.examples && question.examples.length > 0 && (
+                  <div className="bg-gray-800 rounded-lg p-4 shadow-md">
+                    <h2 className="text-lg font-semibold text-purple-400 mb-2">
+                      Examples
+                    </h2>
+                    {question.examples.map((example, index) => (
+                      <div key={example._id} className="mb-4 last:mb-0">
+                        <div className="font-medium text-white mb-2">
+                          Example {index + 1}:
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <div className="text-gray-400 mb-1">Input:</div>
+                            <pre className="font-mono text-sm whitespace-pre-wrap bg-gray-850 p-3 rounded border border-gray-700">
+                              {example.input}
+                            </pre>
+                          </div>
+                          <div>
+                            <div className="text-gray-400 mb-1">Output:</div>
+                            <pre className="font-mono text-sm whitespace-pre-wrap bg-gray-850 p-3 rounded border border-gray-700">
+                              {example.output}
+                            </pre>
+                          </div>
+                        </div>
+                        {example.explanation && (
+                          <div className="mt-2 text-gray-400">
+                            <span className="font-medium">Explanation: </span>
+                            {example.explanation}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
 
-                <div className="bg-gray-800 rounded-lg p-4 shadow-md">
-                  <h2 className="text-lg font-semibold text-purple-400 mb-2">
-                    Constraints
-                  </h2>
-                  <pre className="font-mono text-sm whitespace-pre-wrap bg-gray-850 p-3 rounded border border-gray-700">
-                    {question.constraints}
-                  </pre>
-                </div>
+                {question.constraints && (
+                  <div className="bg-gray-800 rounded-lg p-4 shadow-md">
+                    <h2 className="text-lg font-semibold text-purple-400 mb-2">
+                      Constraints
+                    </h2>
+                    <pre className="font-mono text-sm whitespace-pre-wrap bg-gray-850 p-3 rounded border border-gray-700">
+                      {question.constraints}
+                    </pre>
+                  </div>
+                )}
+
+                {question.hints && question.hints.length > 0 && (
+                  <div className="bg-gray-800 rounded-lg p-4 shadow-md">
+                    <h2 className="text-lg font-semibold text-purple-400 mb-2">
+                      Hints
+                    </h2>
+                    <ul className="list-disc list-inside space-y-2">
+                      {question.hints.map((hint, index) => (
+                        <li key={index} className="text-gray-300">
+                          {hint}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             )}
 
             {activeTab === "solutions" && (
               <div className="text-gray-300 space-y-4">
                 <h2 className="text-xl font-semibold text-purple-400 mb-4">
-                  Community Solutions
+                  Solution
                 </h2>
-                <div className="bg-gray-800 rounded-lg p-4 shadow-md border border-gray-700">
-                  <div className="flex justify-between items-center mb-2">
-                    <div className="font-medium text-white">
-                      Optimal Time Complexity Solution
+                {question.solution && (
+                  <div className="bg-gray-800 rounded-lg p-4 shadow-md border border-gray-700">
+                    <div className="flex justify-between items-center mb-2">
+                      <div className="font-medium text-white">
+                        Optimal Solution
+                      </div>
                     </div>
-                    <div className="text-sm text-gray-400">by CodeMaster</div>
+                    <pre className="font-mono text-sm whitespace-pre-wrap bg-gray-850 p-3 rounded border border-gray-700">
+                      {question.solution}
+                    </pre>
                   </div>
-                  <div className="text-sm text-gray-400 mb-2">
-                    Time: O(n), Space: O(1)
-                  </div>
-                  <pre className="font-mono text-sm whitespace-pre-wrap bg-gray-850 p-3 rounded border border-gray-700">
-                    {`function solution(arr) {
-  // Optimal implementation
-  let result = 0;
-  for (let i = 0; i < arr.length; i++) {
-    // Do optimal calculations...
-  }
-  return result;
-}`}
-                  </pre>
-                </div>
-
-                <div className="bg-gray-800 rounded-lg p-4 shadow-md border border-gray-700">
-                  <div className="flex justify-between items-center mb-2">
-                    <div className="font-medium text-white">
-                      Dynamic Programming Approach
-                    </div>
-                    <div className="text-sm text-gray-400">by AlgoNinja</div>
-                  </div>
-                  <div className="text-sm text-gray-400 mb-2">
-                    Time: O(n²), Space: O(n)
-                  </div>
-                  <pre className="font-mono text-sm whitespace-pre-wrap bg-gray-850 p-3 rounded border border-gray-700">
-                    {`function solution(arr) {
-  // DP approach
-  const dp = new Array(arr.length).fill(0);
-  // Dynamic programming implementation...
-  return dp[arr.length - 1];
-}`}
-                  </pre>
-                </div>
+                )}
               </div>
             )}
 
@@ -421,50 +655,39 @@ function CodingQuestion() {
                   Your Submissions
                 </h2>
                 <div className="space-y-4">
-                  {[
-                    {
-                      status: "Accepted",
-                      date: "May 14, 2025",
-                      runtime: "75ms",
-                      memory: "38.2MB",
-                    },
-                    {
-                      status: "Wrong Answer",
-                      date: "May 13, 2025",
-                      runtime: "82ms",
-                      memory: "40.1MB",
-                    },
-                  ].map((submission, index) => (
-                    <div
-                      key={index}
-                      className="bg-gray-800 rounded-lg p-4 shadow-md border border-gray-700 flex justify-between items-center"
-                    >
-                      <div>
-                        <div
-                          className={`font-medium ${
-                            submission.status === "Accepted"
-                              ? "text-green-400"
-                              : "text-red-400"
-                          }`}
-                        >
-                          {submission.status}
+                  {submissions.length > 0 ? (
+                    submissions.map((submission) => (
+                      <div
+                        key={submission._id}
+                        className="bg-gray-800 rounded-lg p-4 shadow-md border border-gray-700 flex justify-between items-center"
+                      >
+                        <div>
+                          <div
+                            className={`font-medium ${
+                              submission.status === "Accepted"
+                                ? "text-green-400"
+                                : "text-red-400"
+                            }`}
+                          >
+                            {submission.status}
+                          </div>
+                          <div className="text-sm text-gray-400">
+                            {new Date(
+                              submission.createdAt
+                            ).toLocaleDateString()}
+                          </div>
                         </div>
-                        <div className="text-sm text-gray-400">
-                          {submission.date}
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-sm text-gray-300">
-                          Runtime: {submission.runtime}
-                        </div>
-                        <div className="text-sm text-gray-300">
-                          Memory: {submission.memory}
+                        <div className="text-right">
+                          <div className="text-sm text-gray-300">
+                            Runtime: {submission.runtime}ms
+                          </div>
+                          <div className="text-sm text-gray-300">
+                            Memory: {submission.memory}MB
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                  {/* No submissions message */}
-                  {false && (
+                    ))
+                  ) : (
                     <div className="text-center py-8 text-gray-500">
                       No submissions yet
                     </div>
@@ -555,136 +778,241 @@ function CodingQuestion() {
                   <div className="flex gap-3">
                     <button
                       onClick={handleRunCode}
-                      className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors flex items-center shadow-md"
+                      disabled={isExecuting}
+                      className={`px-4 py-2 bg-gray-700 text-white rounded-lg transition-colors flex items-center shadow-md ${
+                        isExecuting
+                          ? "opacity-50 cursor-not-allowed"
+                          : "hover:bg-gray-600"
+                      }`}
                     >
-                      <MdPlayArrow size={20} className="mr-1" />
-                      Run
+                      {isExecuting ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white mr-2"></div>
+                          Running...
+                        </>
+                      ) : (
+                        <>
+                          <MdPlayArrow size={20} className="mr-1" />
+                          Run
+                        </>
+                      )}
                     </button>
                     <button
                       onClick={handleSubmit}
-                      className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-500 transition-colors flex items-center shadow-md"
+                      disabled={isExecuting}
+                      className={`px-4 py-2 bg-purple-600 text-white rounded-lg transition-colors flex items-center shadow-md ${
+                        isExecuting
+                          ? "opacity-50 cursor-not-allowed"
+                          : "hover:bg-purple-500"
+                      }`}
                     >
-                      <MdSend size={20} className="mr-1" />
-                      Submit
+                      {isExecuting ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white mr-2"></div>
+                          Submitting...
+                        </>
+                      ) : (
+                        <>
+                          <MdSend size={20} className="mr-1" />
+                          Submit
+                        </>
+                      )}
                     </button>
                   </div>
                 </div>
               </div>
 
-              <div className="flex-1 relative">
-                <Editor
-                  height="100%"
-                  language={language}
-                  theme="vs-dark"
-                  value={code || getDefaultCode(language)}
-                  onChange={(value) => setCode(value)}
-                  options={{
-                    minimap: { enabled: false },
-                    fontSize: 14,
-                    lineNumbers: "on",
-                    roundedSelection: false,
-                    scrollBeyondLastLine: false,
-                    automaticLayout: true,
+              {/* Main Content Area */}
+              <div className="flex-1 flex flex-col min-h-0 relative">
+                {/* Editor */}
+                <div
+                  className="flex-1 relative"
+                  style={{
+                    height: testResults
+                      ? `calc(100% - ${panelHeight}px)`
+                      : "100%",
+                    transition: isDraggingPanel
+                      ? "none"
+                      : "height 0.2s ease-in-out",
                   }}
-                />
-              </div>
+                >
+                  <Editor
+                    height="100%"
+                    language={language}
+                    theme="vs-dark"
+                    value={code || getDefaultCode(language)}
+                    onChange={(value) => setCode(value)}
+                    options={{
+                      minimap: { enabled: false },
+                      fontSize: 14,
+                      lineNumbers: "on",
+                      roundedSelection: false,
+                      scrollBeyondLastLine: false,
+                      automaticLayout: true,
+                    }}
+                  />
+                </div>
 
-              {testResults !== null && (
-                <div className="bg-gray-800 border-t border-gray-700 p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center">
-                      <span
-                        className={`mr-2 font-medium flex items-center ${
-                          testResults.passed === testResults.total
-                            ? "text-green-500"
-                            : "text-red-500"
-                        }`}
-                      >
-                        {testResults.passed === testResults.total ? (
-                          <MdCheck className="mr-1" size={20} />
-                        ) : null}
-                        {executionStatus}
-                      </span>
-                      <span className="text-gray-400">
-                        {testResults.passed}/{testResults.total} test cases
-                        passed
-                      </span>
+                {/* Test Results Panel */}
+                {testResults !== null && (
+                  <>
+                    {/* Drag Handle */}
+                    <div
+                      className="h-1 bg-gray-700 hover:bg-purple-500 cursor-row-resize relative z-20"
+                      onMouseDown={handlePanelDragStart}
+                    >
+                      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-1 bg-gray-600 rounded-full opacity-0 hover:opacity-100 transition-opacity" />
                     </div>
-                    <div className="text-gray-400 text-sm">
-                      Time: {testResults.time.toFixed(2)}ms | Memory:{" "}
-                      {testResults.memory}MB
-                    </div>
-                  </div>
 
-                  {/* Test Case Details */}
-                  <div className="mt-3 space-y-2">
-                    {testResults.cases.map((testCase, index) => (
-                      <div
-                        key={index}
-                        className={`p-3 rounded-lg border ${
-                          testCase.passed
-                            ? "bg-green-900/20 border-green-800"
-                            : "bg-red-900/20 border-red-800"
-                        }`}
-                      >
-                        <div className="flex justify-between items-center mb-1">
-                          <span
-                            className={`font-medium ${
-                              testCase.passed
-                                ? "text-green-400"
-                                : "text-red-400"
+                    <div
+                      className="bg-gray-800 border-t border-gray-700 p-4 overflow-y-auto absolute bottom-0 left-0 right-0"
+                      style={{
+                        height: `${panelHeight}px`,
+                        transition: isDraggingPanel
+                          ? "none"
+                          : "height 0.2s ease-in-out",
+                        zIndex: 10,
+                      }}
+                    >
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center space-x-4">
+                          <div
+                            className={`flex items-center ${
+                              testResults.passed === testResults.total
+                                ? "text-green-500"
+                                : "text-yellow-500"
                             }`}
                           >
-                            Test Case {index + 1}:{" "}
-                            {testCase.passed ? "Passed" : "Failed"}
-                          </span>
-                          {testCase.passed && (
-                            <span className="text-gray-400 text-sm">
-                              {testCase.time.toFixed(2)}ms | {testCase.memory}MB
+                            {testResults.passed === testResults.total ? (
+                              <MdCheck className="mr-2" size={24} />
+                            ) : (
+                              <MdPlayArrow className="mr-2" size={24} />
+                            )}
+                            <span className="font-medium">
+                              {testResults.passed === testResults.total
+                                ? "All Test Cases Passed"
+                                : `${testResults.passed}/${testResults.total} Test Cases Passed`}
                             </span>
+                          </div>
+                          {testResults.time !== undefined && (
+                            <div className="text-gray-400 text-sm">
+                              Runtime: {testResults.time.toFixed(2)}ms
+                            </div>
+                          )}
+                          {testResults.memory !== undefined && (
+                            <div className="text-gray-400 text-sm">
+                              Memory: {testResults.memory}MB
+                            </div>
                           )}
                         </div>
-                        <div className="grid grid-cols-2 gap-2 text-sm">
-                          <div>
-                            <div className="text-gray-400 mb-1">Input:</div>
-                            <pre className="bg-gray-850 p-2 rounded text-gray-300 overflow-x-auto">
-                              {testCase.input}
-                            </pre>
-                          </div>
-                          <div>
-                            <div className="text-gray-400 mb-1">
-                              {testCase.passed ? "Output:" : "Expected:"}
-                            </div>
-                            <pre className="bg-gray-850 p-2 rounded text-gray-300 overflow-x-auto">
-                              {testCase.passed
-                                ? testCase.output
-                                : testCase.expected}
-                            </pre>
-                            {!testCase.passed && testCase.output && (
-                              <div className="mt-2">
-                                <div className="text-gray-400 mb-1">
-                                  Your Output:
-                                </div>
-                                <pre className="bg-gray-850 p-2 rounded text-gray-300 overflow-x-auto">
-                                  {testCase.output}
-                                </pre>
-                              </div>
-                            )}
-                            {!testCase.passed && testCase.error && (
-                              <div className="mt-2">
-                                <div className="text-red-400 mb-1">Error:</div>
-                                <pre className="bg-gray-850 p-2 rounded text-red-300 overflow-x-auto">
-                                  {testCase.error}
-                                </pre>
-                              </div>
-                            )}
-                          </div>
-                        </div>
+                        <button
+                          onClick={() => setTestResults(null)}
+                          className="text-gray-400 hover:text-gray-300"
+                        >
+                          <MdRefresh size={20} />
+                        </button>
                       </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+
+                      {/* Test Case Details */}
+                      <div className="space-y-3">
+                        {testResults.cases.map((testCase, index) => (
+                          <div
+                            key={index}
+                            className={`p-4 rounded-lg border ${
+                              testCase.passed
+                                ? "bg-green-900/20 border-green-800"
+                                : "bg-red-900/20 border-red-800"
+                            }`}
+                          >
+                            <div className="flex justify-between items-center mb-2">
+                              <div className="flex items-center">
+                                <span
+                                  className={`font-medium flex items-center ${
+                                    testCase.passed
+                                      ? "text-green-400"
+                                      : "text-red-400"
+                                  }`}
+                                >
+                                  {testCase.passed ? (
+                                    <MdCheck className="mr-2" size={20} />
+                                  ) : (
+                                    <MdPlayArrow className="mr-2" size={20} />
+                                  )}
+                                  Test Case {index + 1}
+                                </span>
+                                {testCase.time !== undefined &&
+                                  testCase.time > 0 && (
+                                    <span className="ml-4 text-gray-400 text-sm">
+                                      Runtime: {testCase.time.toFixed(2)}ms
+                                    </span>
+                                  )}
+                              </div>
+                              <span
+                                className={`px-2 py-1 rounded text-sm ${
+                                  testCase.passed
+                                    ? "bg-green-900/50 text-green-400"
+                                    : "bg-red-900/50 text-red-400"
+                                }`}
+                              >
+                                {testCase.passed ? "Passed" : "Failed"}
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <div className="text-gray-400 mb-1 text-sm">
+                                  Input:
+                                </div>
+                                <pre className="bg-gray-850 p-3 rounded text-gray-300 overflow-x-auto text-sm">
+                                  {typeof testCase.input === "object"
+                                    ? JSON.stringify(testCase.input, null, 2)
+                                    : testCase.input}
+                                </pre>
+                              </div>
+                              <div>
+                                <div className="text-gray-400 mb-1 text-sm">
+                                  {testCase.passed ? "Output:" : "Expected:"}
+                                </div>
+                                <pre className="bg-gray-850 p-3 rounded text-gray-300 overflow-x-auto text-sm">
+                                  {typeof testCase.expected === "object"
+                                    ? JSON.stringify(testCase.expected, null, 2)
+                                    : testCase.expected}
+                                </pre>
+                                {!testCase.passed && testCase.output && (
+                                  <div className="mt-2">
+                                    <div className="text-gray-400 mb-1 text-sm">
+                                      Your Output:
+                                    </div>
+                                    <pre className="bg-gray-850 p-3 rounded text-gray-300 overflow-x-auto text-sm">
+                                      {typeof testCase.output === "object"
+                                        ? JSON.stringify(
+                                            testCase.output,
+                                            null,
+                                            2
+                                          )
+                                        : testCase.output}
+                                    </pre>
+                                  </div>
+                                )}
+                                {!testCase.passed && testCase.error && (
+                                  <div className="mt-2">
+                                    <div className="text-red-400 mb-1 text-sm">
+                                      Error:
+                                    </div>
+                                    <pre className="bg-gray-850 p-3 rounded text-red-300 overflow-x-auto text-sm">
+                                      {testCase.error}
+                                    </pre>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
             </>
           )}
 

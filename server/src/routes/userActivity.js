@@ -1,10 +1,10 @@
 const express = require("express");
 const router = express.Router();
 const UserActivity = require("../models/UserActivity");
-const auth = require("../middleware/auth");
+const { protect } = require("../middleware/auth");
 
 // Track user activity
-router.post("/track", auth, async (req, res) => {
+router.post("/track", protect, async (req, res) => {
   try {
     const { activityType, details } = req.body;
     if (!req.user || !req.user.userId) {
@@ -41,7 +41,7 @@ router.post("/track", auth, async (req, res) => {
 });
 
 // Get user activity for a specific month
-router.get("/month/:year/:month", auth, async (req, res) => {
+router.get("/month/:year/:month", protect, async (req, res) => {
   try {
     if (!req.user || !req.user.userId) {
       return res.status(401).json({ message: "User ID not found in token" });

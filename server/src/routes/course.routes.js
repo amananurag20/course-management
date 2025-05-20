@@ -1,7 +1,7 @@
 const express = require("express");
 const { body } = require("express-validator");
 const courseController = require("../controllers/course.controller");
-const authMiddleware = require("../middleware/auth");
+const { protect } = require("../middleware/auth");
 const validateRequest = require("../middleware/validate-request");
 const checkRole = require("../middleware/check-role");
 
@@ -24,10 +24,9 @@ const courseValidation = [
 ];
 
 // Routes
-router.use(authMiddleware); // Protect all course routes
-
 router.post(
   "/",
+  protect,
   checkRole(["instructor", "admin"]),
   courseValidation,
   validateRequest,
@@ -39,12 +38,13 @@ router.get("/:id", courseController.getCourseById);
 
 router.put(
   "/:id",
+  protect,
   checkRole(["instructor", "admin"]),
   courseValidation,
   validateRequest,
   courseController.updateCourse
 );
 
-router.post("/:id/enroll", courseController.enrollInCourse);
+router.post("/:id/enroll", protect, courseController.enrollInCourse);
 
 module.exports = router;

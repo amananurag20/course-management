@@ -1,7 +1,7 @@
 const express = require("express");
 const { body } = require("express-validator");
 const assignmentController = require("../controllers/assignment.controller");
-const authMiddleware = require("../middleware/auth");
+const { protect } = require("../middleware/auth");
 const validateRequest = require("../middleware/validate-request");
 const checkRole = require("../middleware/check-role");
 
@@ -32,31 +32,37 @@ const gradeValidation = [
 ];
 
 // Routes
-router.use(authMiddleware); // Protect all assignment routes
-
 router.post(
   "/course/:courseId",
+  protect,
   checkRole(["instructor", "admin"]),
   assignmentValidation,
   validateRequest,
   assignmentController.createAssignment
 );
 
-router.get("/course/:courseId", assignmentController.getCourseAssignments);
+router.get(
+  "/course/:courseId",
+  protect,
+  assignmentController.getCourseAssignments
+);
+router.get("/:id", protect, assignmentController.getAssignmentById);
 
 router.post(
-  "/:assignmentId/submit",
+  "/:id/submit",
+  protect,
   submissionValidation,
   validateRequest,
   assignmentController.submitAssignment
 );
 
 router.post(
-  "/:assignmentId/submissions/:submissionId/grade",
+  "/:id/grade",
+  protect,
   checkRole(["instructor", "admin"]),
   gradeValidation,
   validateRequest,
-  assignmentController.gradeSubmission
+  assignmentController.gradeAssignment
 );
 
 module.exports = router;
