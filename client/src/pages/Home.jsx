@@ -3,7 +3,7 @@ import Sidebar from "../components/Sidebar";
 import Dashboard from "../components/Dashboard";
 import Reels from "../components/Reels";
 import Courses from "../components/Courses";
-import Practice from "../components/Practice";
+import Practice from "./Practice";
 
 function Home() {
   const [selectedComponent, setSelectedComponent] = useState("Dashboard");

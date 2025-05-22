@@ -19,8 +19,8 @@ const LANGUAGE_CONFIGS = {
   },
   java: {
     image: "openjdk:11",
-    filename: "Solution.java",
-    command: ["bash", "-c", "javac Solution.java && java Solution"],
+    filename: "Main.java",
+    command: ["bash", "-c", "javac Main.java && java Main"],
     timeout: 5000,
   },
   cpp: {
@@ -178,6 +178,7 @@ async function execWithTimeout(container, cmd, timeoutMs = 5000) {
       });
 
       stream.on("end", async () => {
+        console.log("data", stdout, stderr);
         clearTimeout(timeoutId);
         try {
           const inspectResult = await exec.inspect();
@@ -229,6 +230,8 @@ async function executeCode({ code, language, problem, testCases }) {
       cases: [],
       time: 0,
       memory: 0,
+      error: null,
+      status: "success",
     };
 
     // Prepare execution command based on language
@@ -237,15 +240,23 @@ async function executeCode({ code, language, problem, testCases }) {
       // For Java, compile first then run for each test
       const compileResult = await execWithTimeout(
         container,
-        ["bash", "-c", "cd /app && javac Solution.java"],
+        ["bash", "-c", "cd /app && javac Main.java"],
         10000
       );
 
       if (compileResult.exitCode !== 0) {
-        throw new Error(`Compilation failed: ${compileResult.stderr}`);
+        return {
+          passed: 0,
+          total: testCases.length,
+          cases: [],
+          time: 0,
+          memory: 0,
+          error: `Compilation failed: ${compileResult.stderr}`,
+          status: "compilation_error",
+        };
       }
 
-      execCommand = ["bash", "-c", "cd /app && java Solution"];
+      execCommand = ["bash", "-c", "cd /app && java Main"];
     } else if (language.toLowerCase() === "cpp") {
       // For C++, compile first
       const compileResult = await execWithTimeout(
@@ -259,7 +270,15 @@ async function executeCode({ code, language, problem, testCases }) {
       );
 
       if (compileResult.exitCode !== 0) {
-        throw new Error(`Compilation failed: ${compileResult.stderr}`);
+        return {
+          passed: 0,
+          total: testCases.length,
+          cases: [],
+          time: 0,
+          memory: 0,
+          error: `Compilation failed: ${compileResult.stderr}`,
+          status: "compilation_error",
+        };
       }
 
       execCommand = ["bash", "-c", "cd /app && ./solution"];
@@ -293,6 +312,19 @@ async function executeCode({ code, language, problem, testCases }) {
           config.timeout
         );
 
+        if (execResult.exitCode !== 0) {
+          results.cases.push({
+            passed: false,
+            input: testCase.input,
+            output: "",
+            expected: testCase.output,
+            time: Date.now() - startTime,
+            error: execResult.stderr || "Runtime error",
+            exitCode: execResult.exitCode,
+          });
+          continue;
+        }
+
         const executionTime = Date.now() - startTime;
 
         console.log(`Test ${i + 1} - stdout:`, execResult.stdout);
@@ -322,8 +354,7 @@ async function executeCode({ code, language, problem, testCases }) {
           actualOutput = execResult.stdout.trim();
         }
 
-        const passed =
-          JSON.stringify(actualOutput) === JSON.stringify(expectedOutput);
+        const passed = JSON.stringify(actualOutput) === testCase.output;
 
         results.cases.push({
           passed,
@@ -354,7 +385,15 @@ async function executeCode({ code, language, problem, testCases }) {
     return results;
   } catch (error) {
     console.error("Code execution error:", error);
-    throw new Error(`Code execution failed: ${error.message}`);
+    return {
+      passed: 0,
+      total: testCases?.length || 0,
+      cases: [],
+      time: 0,
+      memory: 0,
+      error: error.message,
+      status: "execution_error",
+    };
   } finally {
     if (container) {
       await cleanupContainer(container);

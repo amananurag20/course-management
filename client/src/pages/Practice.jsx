@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useSidebar } from "../context/SidebarContext";
 import { MdCode, MdQuiz, MdSearch, MdCheck, MdSort } from "react-icons/md";
 import { problemService } from "../services/problemService";
+import { mcqService } from "../services/mcqService";
 
 const Practice = () => {
   const { isGlobalSidebarOpen } = useSidebar();
@@ -12,66 +13,85 @@ const Practice = () => {
   const [selectedDifficulty, setSelectedDifficulty] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("id");
-  const [questions, setQuestions] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  
+  // Separate states for coding and MCQ questions
+  const [codingQuestions, setCodingQuestions] = useState([]);
+  const [mcqQuestions, setMcqQuestions] = useState([]);
+  const [loading, setLoading] = useState({
+    coding: false,
+    mcq: false
+  });
+  const [error, setError] = useState({
+    coding: null,
+    mcq: null
+  });
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
-  // Fetch questions when component mounts or tab changes
+  // Fetch both types of questions when component mounts
   useEffect(() => {
-    const fetchQuestions = async () => {
+    const fetchAllQuestions = async () => {
+      // Fetch coding questions
+      setLoading(prev => ({ ...prev, coding: true }));
       try {
-        setLoading(true);
-        const response = await problemService.getAllProblems();
-        console.log("API Response:", response); // Debug log
-
-        // Handle both array and object response formats
-        const problems = Array.isArray(response)
-          ? response
-          : response.problems || [];
-        console.log("Processed Problems:", problems); // Debug log
-
-        setQuestions(problems);
-        setTotalPages(response.totalPages || 1);
-        setCurrentPage(response.currentPage || 1);
+        const codingResponse = await problemService.getAllProblems();
+        const problems = Array.isArray(codingResponse)
+          ? codingResponse
+          : codingResponse.problems || [];
+        setCodingQuestions(problems);
       } catch (err) {
-        console.error("Error fetching questions:", err);
-        setError(err.message || "Failed to fetch questions");
+        console.error("Error fetching coding questions:", err);
+        setError(prev => ({
+          ...prev,
+          coding: err.message || "Failed to fetch coding questions"
+        }));
       } finally {
-        setLoading(false);
+        setLoading(prev => ({ ...prev, coding: false }));
+      }
+
+      // Fetch MCQ questions
+      setLoading(prev => ({ ...prev, mcq: true }));
+      try {
+        const mcqResponse = await mcqService.getAllMcqQuestions();
+        const mcqs = mcqResponse.data?.mcqQuestions || [];
+        console.log({mcqs});
+        setMcqQuestions(mcqs);
+      } catch (err) {
+        console.error("Error fetching MCQ questions:", err);
+        setError(prev => ({
+          ...prev,
+          mcq: err.message || "Failed to fetch MCQ questions"
+        }));
+      } finally {
+        setLoading(prev => ({ ...prev, mcq: false }));
       }
     };
 
-    fetchQuestions();
-  }, [activeTab]);
+    fetchAllQuestions();
+  }, []);
 
-  // Get unique topics from questions
+  // Get current questions based on active tab
+  const currentQuestions = useMemo(() => {
+    return activeTab === "coding" ? codingQuestions : mcqQuestions;
+  }, [activeTab, codingQuestions, mcqQuestions]);
+
+  // Get unique topics from current questions
   const topics = useMemo(() => {
-    const allTopics = questions.map((q) => q.topic || "Uncategorized");
-    console.log("Available Topics:", allTopics); // Debug log
+    const allTopics = currentQuestions.map((q) => q.topic || "Uncategorized");
     return [...new Set(allTopics)];
-  }, [questions]);
+  }, [currentQuestions]);
 
-  // Get unique difficulties
+  // Get unique difficulties from current questions
   const difficulties = useMemo(() => {
-    const allDifficulties = questions.map(
+    const allDifficulties = currentQuestions.map(
       (q) => q.difficulty?.toLowerCase() || "medium"
     );
-    console.log("Available Difficulties:", allDifficulties); // Debug log
     return [...new Set(allDifficulties)];
-  }, [questions]);
+  }, [currentQuestions]);
 
   // Filter and sort questions based on selected filters
   const filteredQuestions = useMemo(() => {
-    console.log("Current Filters:", {
-      selectedTopic,
-      selectedDifficulty,
-      searchQuery,
-      sortBy,
-    }); // Debug log
-
-    const filtered = questions
+    const filtered = currentQuestions
       .filter((q) => {
         const topicMatch =
           selectedTopic === "all" ||
@@ -98,9 +118,8 @@ const Practice = () => {
         return a._id.localeCompare(b._id);
       });
 
-    console.log("Filtered Questions:", filtered); // Debug log
     return filtered;
-  }, [questions, selectedTopic, selectedDifficulty, searchQuery, sortBy]);
+  }, [currentQuestions, selectedTopic, selectedDifficulty, searchQuery, sortBy]);
 
   // Reset filters when tab changes
   useEffect(() => {
@@ -110,7 +129,11 @@ const Practice = () => {
   }, [activeTab]);
 
   const handleQuestionClick = (question) => {
-    navigate(`/practice/${question.type || "coding"}/${question._id}`);
+    if (activeTab === "coding") {
+      navigate(`/practice/coding/${question._id}`);
+    } else {
+      navigate(`/practice/mcq/${question._id}`);
+    }
   };
 
   const mainContentStyle = {
@@ -118,6 +141,9 @@ const Practice = () => {
     width: `calc(100% - ${isGlobalSidebarOpen ? "16rem" : "5rem"})`,
     transition: "all 0.3s ease-in-out",
   };
+
+  const isLoading = loading.coding || loading.mcq;
+  const currentError = activeTab === "coding" ? error.coding : error.mcq;
 
   return (
     <div
@@ -214,12 +240,12 @@ const Practice = () => {
 
         {/* Questions Table */}
         <div className="bg-gray-800 rounded-lg overflow-hidden">
-          {loading ? (
+          {isLoading ? (
             <div className="flex justify-center items-center py-12">
               <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500"></div>
             </div>
-          ) : error ? (
-            <div className="text-center py-12 text-red-500">{error}</div>
+          ) : currentError ? (
+            <div className="text-center py-12 text-red-500">{currentError}</div>
           ) : (
             <table className="w-full">
               <thead>
@@ -233,11 +259,9 @@ const Practice = () => {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
                     Topic
                   </th>
-                  {activeTab === "coding" && (
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      Difficulty
-                    </th>
-                  )}
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                    {activeTab === "coding" ? "Difficulty" : "Time Limit"}
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-700">
@@ -264,15 +288,15 @@ const Practice = () => {
                         {question.topic || "Uncategorized"}
                       </span>
                     </td>
-                    {activeTab === "coding" && (
-                      <td className="px-6 py-4">
+                    <td className="px-6 py-4">
+                      {activeTab === "coding" ? (
                         <span
                           className={`px-3 py-1 rounded-full text-xs ${
                             (question.difficulty?.toLowerCase() || "medium") ===
                             "easy"
                               ? "bg-green-900 text-green-200"
-                              : (question.difficulty?.toLowerCase() ||
-                                  "medium") === "medium"
+                              : (question.difficulty?.toLowerCase() || "medium") ===
+                                "medium"
                               ? "bg-yellow-900 text-yellow-200"
                               : "bg-red-900 text-red-200"
                           }`}
@@ -280,15 +304,19 @@ const Practice = () => {
                           {question.difficulty?.charAt(0).toUpperCase() +
                             question.difficulty?.slice(1) || "Medium"}
                         </span>
-                      </td>
-                    )}
+                      ) : (
+                        <span className="px-3 py-1 bg-blue-900 text-blue-200 rounded-full text-xs">
+                          {question.timeLimit} mins
+                        </span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           )}
 
-          {!loading && !error && filteredQuestions.length === 0 && (
+          {!isLoading && !currentError && filteredQuestions.length === 0 && (
             <div className="text-center py-12 text-gray-400">
               No questions found matching your criteria.
             </div>

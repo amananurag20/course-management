@@ -9,6 +9,7 @@ const assignmentRoutes = require("./routes/assignment.routes");
 const userActivityRoutes = require("./routes/userActivity.js");
 const problemRoutes = require("./routes/problem.routes.js");
 const submissionRoutes = require("./routes/submissionRoutes.js");
+const mcqQuestionRoutes = require("./routes/mcqQuestionRoutes");
 const app = express();
 
 // Middleware
@@ -22,6 +23,7 @@ app.use("/api/assignments", assignmentRoutes);
 app.use("/api/user-activity", userActivityRoutes);
 app.use("/api/problems", problemRoutes);
 app.use("/api/submissions", submissionRoutes);
+app.use("/api/mcq-questions", mcqQuestionRoutes);
 // Database connection
 mongoose
   .connect(

@@ -67,7 +67,7 @@ const mcqQuestionSchema = new mongoose.Schema(
       type: Number,
       required: true,
       default: function () {
-        return Math.ceil(this.totalPoints * 0.6); // 60% passing score by default
+        return Math.ceil(this.totalPoints * 0.4); // 60% passing score by default
       },
     },
     isActive: {
