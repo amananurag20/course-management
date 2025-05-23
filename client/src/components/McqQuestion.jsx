@@ -438,55 +438,85 @@ const McqQuestion = () => {
                         <div className="p-6">
                           <div className="space-y-3">
                             {question.options.map((option, optIndex) => {
+                              // Get the selected option and check if current option is correct
                               const isSelected = answerData?.selectedOption === optIndex;
-                              const isCorrect = optIndex === question.correctOption;
+                              const isCorrect = option.isCorrect;
+                              const wasAttempted = typeof answerData?.selectedOption !== 'undefined';
+                              
+                              let optionClass = "";
+                              let textClass = "";
+                              
+                              if (isCorrect) {
+                                // Correct answer is always green
+                                optionClass = "bg-green-500/20 border-green-500/30";
+                                textClass = "text-green-300";
+                              } else if (isSelected) {
+                                // Selected wrong answer is red
+                                optionClass = "bg-red-500/20 border-red-500/30";
+                                textClass = "text-red-300";
+                              } else {
+                                // Unselected and incorrect options
+                                optionClass = "bg-gray-700/30 border-gray-600/50";
+                                textClass = "text-gray-300";
+                              }
                               
                               return (
                                 <div
                                   key={optIndex}
-                                  className={`p-4 rounded-lg border ${
-                                    isSelected && !isCorrect
-                                      ? "bg-red-500/10 border-red-500/30"
-                                      : isCorrect
-                                        ? "bg-green-500/10 border-green-500/30"
-                                        : "bg-gray-700/30 border-gray-600/50"
-                                  }`}
+                                  className={`p-4 rounded-lg border ${optionClass}`}
                                 >
-                                  <div className="flex items-center">
-                                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center mr-3 ${
-                                      isSelected && !isCorrect
-                                        ? "border-red-500"
-                                        : isCorrect
-                                          ? "border-green-500"
-                                          : "border-gray-500"
-                                    }`}>
-                                      {(isSelected || isCorrect) && (
-                                        <div className={`w-2 h-2 rounded-full ${
-                                          isSelected && !isCorrect
-                                            ? "bg-red-500"
-                                            : "bg-green-500"
-                                        }`}></div>
-                                      )}
-                                    </div>
-                                    <span className={`flex-1 ${
-                                      isSelected && !isCorrect
-                                        ? "text-red-300"
-                                        : isCorrect
-                                          ? "text-green-300"
-                                          : "text-gray-300"
-                                    }`}>
-                                      {option.text}
-                                    </span>
-                                    {(isSelected || isCorrect) && (
-                                      <div className="ml-2">
-                                        {isCorrect ? (
-                                          <MdCheck className="text-green-400" size={20} />
-                                        ) : (
-                                          <MdClose className="text-red-400" size={20} />
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center flex-1">
+                                      <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center mr-3 ${
+                                        isCorrect 
+                                          ? "border-green-500" 
+                                          : isSelected 
+                                            ? "border-red-500"
+                                            : "border-gray-500"
+                                      }`}>
+                                        {(isSelected || isCorrect) && (
+                                          <div className={`w-2 h-2 rounded-full ${
+                                            isCorrect 
+                                              ? "bg-green-500" 
+                                              : isSelected ? "bg-red-500" : ""
+                                          }`}></div>
                                         )}
                                       </div>
-                                    )}
+                                      <span className={textClass}>
+                                        {option.text}
+                                      </span>
+                                    </div>
+                                    <div className="ml-4">
+                                      {isCorrect && (
+                                        <div className="flex items-center text-green-400">
+                                          <MdCheck size={20} />
+                                          <span className="ml-2 text-xs">Correct Answer</span>
+                                        </div>
+                                      )}
+                                      {isSelected && !isCorrect && (
+                                        <div className="flex items-center text-red-400">
+                                          <MdClose size={20} />
+                                          <span className="ml-2 text-xs">Incorrect</span>
+                                        </div>
+                                      )}
+                                    </div>
                                   </div>
+                                  {isCorrect && (
+                                    <div className="mt-2 text-xs text-green-400 flex items-center gap-1">
+                                      <MdInfo size={14} />
+                                      {isSelected 
+                                        ? "Well done! This was the correct answer"
+                                        : wasAttempted 
+                                          ? "This was the correct answer"
+                                          : "This is the correct answer"}
+                                    </div>
+                                  )}
+                                  {isSelected && !isCorrect && (
+                                    <div className="mt-2 text-xs text-red-400 flex items-center gap-1">
+                                      <MdInfo size={14} />
+                                      Your selection was incorrect
+                                    </div>
+                                  )}
                                 </div>
                               );
                             })}
@@ -503,6 +533,7 @@ const McqQuestion = () => {
                             </div>
                           </div>
                         </div>
+                        
                       </div>
                     );
                   })}
