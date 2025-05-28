@@ -1,5 +1,6 @@
 const McqQuestion = require('../models/McqQuestion');
 const McqSubmission = require('../models/McqSubmission');
+const Course = require('../models/Course');
 
 // Create a new MCQ question
 exports.createMcqQuestion = async (req, res) => {
@@ -168,10 +169,16 @@ exports.validateAnswers = async (req, res) => {
 exports.submitQuiz = async (req, res) => {
   try {
     const { id } = req.params;
-    const { answers, timeTaken, questionData } = req.body;
+    const { answers, timeTaken, questionData, courseId, moduleIndex } = req.body;
     
-    // Get user ID from auth or use anonymous
-    const userId = req.user?._id || '000000000000000000000000'; // Use a default anonymous user ID
+    // Get user ID from auth
+    const userId = req.user?._id;
+    if (!userId) {
+      return res.status(401).json({
+        status: 'fail',
+        message: 'User authentication required'
+      });
+    }
 
     if (!answers || !Array.isArray(answers)) {
       return res.status(400).json({
@@ -189,12 +196,15 @@ exports.submitQuiz = async (req, res) => {
         questionIndex: index,
         selectedOption,
         isCorrect,
+        correctOption: questionData.questions[index].options.findIndex(opt => opt.isCorrect),
         question: questionData.questions[index].question,
         selectedAnswer: questionData.questions[index].options[selectedOption]?.text,
         correctAnswer: questionData.questions[index].options.find(opt => opt.isCorrect)?.text,
         explanation: questionData.questions[index].explanation
       };
     });
+
+    const passed = score >= (questionData.passingScore || 0);
 
     // Create submission record
     const submission = await McqSubmission.create({
@@ -204,18 +214,70 @@ exports.submitQuiz = async (req, res) => {
       score,
       totalQuestions: answers.length,
       timeTaken: timeTaken || 0,
-      passed: score >= (questionData.passingScore || 0)
+      passed
     });
 
-    // Return submission details
+    // If this MCQ is part of a course module, update course completion
+    if (courseId && typeof moduleIndex !== 'undefined') {
+      try {
+        const course = await Course.findById(courseId);
+        if (!course) {
+          throw new Error('Course not found');
+        }
+
+        // Mark module completion in the course
+        course.markModuleCompleted(parseInt(moduleIndex), userId, {
+          mcqScore: score,
+          mcqPassed: passed
+        });
+
+        await course.save();
+
+        // Get updated module unlock status
+        const nextModuleIndex = parseInt(moduleIndex) + 1;
+        const isNextModuleUnlocked = nextModuleIndex < course.modules.length ? 
+          course.isModuleUnlocked(nextModuleIndex, userId) : false;
+
+        // Return submission details with module status
+        return res.status(200).json({
+          status: 'success',
+          data: {
+            submission: {
+              _id: submission._id,
+              score,
+              totalQuestions: answers.length,
+              passingScore: questionData.passingScore,
+              passed,
+              timeTaken: timeTaken || 0,
+              answers: validatedAnswers,
+              submittedAt: submission.submittedAt
+            },
+            moduleStatus: {
+              completed: passed,
+              nextModuleUnlocked: isNextModuleUnlocked,
+              nextModuleIndex: nextModuleIndex
+            }
+          }
+        });
+      } catch (err) {
+        console.error('Failed to update course module completion:', err);
+        return res.status(400).json({
+          status: 'fail',
+          message: 'Failed to update course progress'
+        });
+      }
+    }
+
+    // Return submission details without module status if not part of a course
     res.status(200).json({
       status: 'success',
       data: {
         submission: {
+          _id: submission._id,
           score,
           totalQuestions: answers.length,
           passingScore: questionData.passingScore,
-          passed: score >= (questionData.passingScore || 0),
+          passed,
           timeTaken: timeTaken || 0,
           answers: validatedAnswers,
           submittedAt: submission.submittedAt
@@ -227,6 +289,185 @@ exports.submitQuiz = async (req, res) => {
     res.status(400).json({
       status: 'fail',
       message: error.message || 'Failed to submit quiz'
+    });
+  }
+};
+
+exports.updateCourseModuleCompletion = async (userId, courseId, moduleIndex, mcqData) => {
+  try {
+    const course = await Course.findById(courseId);
+    
+    if (!course) {
+      throw new Error('Course not found');
+    }
+
+    // Find user's enrollment in the course
+    let userEnrollment = course.enrolledUsers.find(
+      enrollment => enrollment.user.toString() === userId.toString()
+    );
+
+    if (!userEnrollment) {
+      // If user is not enrolled, create enrollment
+      userEnrollment = {
+        user: userId,
+        enrolledAt: new Date(),
+        progress: {
+          completedModules: [],
+          currentModule: 0,
+          overallProgress: 0
+        }
+      };
+      course.enrolledUsers.push(userEnrollment);
+    }
+
+    // Initialize progress if it doesn't exist
+    if (!userEnrollment.progress) {
+      userEnrollment.progress = {
+        completedModules: [],
+        currentModule: 0,
+        overallProgress: 0
+      };
+    }
+
+    // Find or create module completion record
+    let moduleCompletion = userEnrollment.progress.completedModules.find(
+      mod => mod.moduleIndex === moduleIndex
+    );
+
+    if (!moduleCompletion) {
+      moduleCompletion = {
+        moduleIndex: moduleIndex,
+        completedAt: new Date(),
+        mcqCompleted: false,
+        mcqScore: 0,
+        mcqPassed: false
+      };
+      userEnrollment.progress.completedModules.push(moduleCompletion);
+    }
+
+    // Update MCQ completion data
+    moduleCompletion.mcqCompleted = true;
+    moduleCompletion.mcqScore = mcqData.mcqScore;
+    moduleCompletion.mcqPassed = mcqData.mcqPassed;
+    moduleCompletion.mcqSubmissionId = mcqData.mcqSubmissionId;
+    moduleCompletion.completedAt = new Date();
+
+    // Update current module if this module is completed and it's the current one
+    if (moduleCompletion.mcqPassed && userEnrollment.progress.currentModule === moduleIndex) {
+      userEnrollment.progress.currentModule = Math.min(
+        moduleIndex + 1, 
+        course.modules.length - 1
+      );
+    }
+
+    // Calculate overall progress
+    const completedCount = userEnrollment.progress.completedModules.filter(
+      mod => mod.mcqPassed
+    ).length;
+    userEnrollment.progress.overallProgress = Math.round(
+      (completedCount / course.modules.length) * 100
+    );
+
+    await course.save();
+    
+    return {
+      success: true,
+      moduleCompletion,
+      overallProgress: userEnrollment.progress.overallProgress,
+      currentModule: userEnrollment.progress.currentModule
+    };
+
+  } catch (error) {
+    console.error('Error updating course module completion:', error);
+    throw error;
+  }
+};
+
+// New endpoint specifically for updating module completion
+exports.updateModuleCompletion = async (req, res) => {
+  try {
+    const { courseId, moduleIndex } = req.params;
+    const { mcqScore, mcqPassed, mcqSubmissionId } = req.body;
+    const userId = req.user?._id;
+
+    if (!userId) {
+      return res.status(401).json({
+        status: 'fail',
+        message: 'User authentication required'
+      });
+    }
+
+    const result = await exports.updateCourseModuleCompletion(
+      userId, 
+      courseId, 
+      parseInt(moduleIndex), 
+      {
+        mcqScore,
+        mcqPassed,
+        mcqSubmissionId
+      }
+    );
+
+    res.status(200).json({
+      status: 'success',
+      data: result
+    });
+
+  } catch (error) {
+    console.error('Error updating module completion:', error);
+    res.status(400).json({
+      status: 'fail',
+      message: error.message || 'Failed to update module completion'
+    });
+  }
+};
+
+// Get user's course progress
+exports.getCourseProgress = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const userId = req.user?._id;
+
+    if (!userId) {
+      return res.status(401).json({
+        status: 'fail',
+        message: 'User authentication required'
+      });
+    }
+
+    const course = await Course.findById(courseId);
+    
+    if (!course) {
+      return res.status(404).json({
+        status: 'fail',
+        message: 'Course not found'
+      });
+    }
+
+    const userEnrollment = course.enrolledUsers.find(
+      enrollment => enrollment.user.toString() === userId.toString()
+    );
+
+    if (!userEnrollment) {
+      return res.status(404).json({
+        status: 'fail',
+        message: 'User not enrolled in this course'
+      });
+    }
+
+    res.status(200).json({
+      status: 'success',
+      data: {
+        progress: userEnrollment.progress,
+        enrolledAt: userEnrollment.enrolledAt
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching course progress:', error);
+    res.status(400).json({
+      status: 'fail',
+      message: error.message || 'Failed to fetch course progress'
     });
   }
 };

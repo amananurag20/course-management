@@ -68,6 +68,7 @@ const McqQuestion = () => {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [startTime, setStartTime] = useState(null);
+  const [moduleStatus, setModuleStatus] = useState(null);
 
   // Fetch question data and set start time
   useEffect(() => {
@@ -167,31 +168,34 @@ const McqQuestion = () => {
       const timeLeftInSeconds = (minutes * 60) + seconds;
       const timeTaken = questionData.timeLimit * 60 - timeLeftInSeconds;
 
+      // Get course info from URL if it exists
+      const courseId = new URLSearchParams(window.location.search).get('courseId');
+      const moduleIndex = new URLSearchParams(window.location.search).get('moduleIndex');
+
       const submissionData = {
         answers: Object.entries(selectedAnswers).map(([index, answerIndex]) => answerIndex),
         timeTaken: Math.max(0, timeTaken || 0),
-        questionData
+        questionData,
+        courseId,
+        moduleIndex: moduleIndex ? parseInt(moduleIndex) : undefined
       };
 
+      // Submit quiz results
       const response = await mcqService.submitMcqQuiz(id, submissionData);
-      console.log('Response:', response);
       
       if (response?.data?.submission) {
-        const { submission } = response.data;
+        const { submission, moduleStatus: updatedModuleStatus } = response.data;
         setScore(submission.score);
         
-        // Process all questions, including unmarked ones
+        if (updatedModuleStatus) {
+          setModuleStatus(updatedModuleStatus);
+        }
+
+        // Process answers for display
         const processedAnswers = questionData.questions.reduce((acc, question, index) => {
           const submissionAnswer = submission.answers.find(a => a.questionIndex === index) || {};
           const selectedOption = submissionAnswer.selectedOption ?? -1;
           const correctOption = submissionAnswer.correctOption ?? question.correctOption ?? -1;
-
-          // Safely get option texts
-          const getOptionText = (optionIndex) => {
-            if (optionIndex < 0) return "Not answered";
-            const option = question.options?.[optionIndex];
-            return option?.text || "Option not found";
-          };
 
           return {
             ...acc,
@@ -201,8 +205,8 @@ const McqQuestion = () => {
               correctOption: correctOption,
               explanation: question.explanation || "No explanation provided",
               selectedAnswer: submissionAnswer.selectedAnswer || "Not answered",
-              selectedOptionText: getOptionText(selectedOption),
-              correctOptionText: getOptionText(correctOption)
+              selectedOptionText: getOptionText(selectedOption, question),
+              correctOptionText: getOptionText(correctOption, question)
             }
           };
         }, {});
@@ -210,9 +214,21 @@ const McqQuestion = () => {
         setSelectedAnswers(processedAnswers);
         setShowResults(true);
         setShowTimeUpModal(false);
-      } else {
-        console.error('Unexpected response structure:', response);
-        throw new Error('Invalid response format from server');
+
+        // If quiz is passed and we're in a course, show success message and redirect
+        if (submission.passed && courseId) {
+          const message = moduleStatus?.nextModuleUnlocked 
+            ? "Congratulations! You've passed the quiz. The next module has been unlocked!"
+            : "Congratulations! You've passed the quiz!";
+          
+          alert(message);
+          
+          const redirectTimeout = setTimeout(() => {
+            navigate(`/course/${courseId}`);
+          }, 3000);
+
+          return () => clearTimeout(redirectTimeout);
+        }
       }
     } catch (err) {
       console.error("Error submitting quiz:", err);
@@ -220,6 +236,13 @@ const McqQuestion = () => {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  // Helper function to safely get option text
+  const getOptionText = (optionIndex, question) => {
+    if (optionIndex < 0) return "Not answered";
+    const option = question.options?.[optionIndex];
+    return option?.text || "Option not found";
   };
 
   const handleTimeUp = () => {
@@ -238,6 +261,201 @@ const McqQuestion = () => {
   const isAnswerSelected = selectedAnswers[currentQuestionIndex] !== undefined;
   const isLastQuestion = currentQuestionIndex === totalQuestions - 1;
   const allQuestionsAnswered = Object.keys(selectedAnswers).length === totalQuestions;
+
+  const renderResults = () => {
+    if (!showResults) return null;
+
+    return (
+      <div className="space-y-6">
+        {/* Results Summary Card */}
+        <div className="bg-gray-800/50 backdrop-blur-sm rounded-2xl p-8 border border-gray-700/50 mb-8">
+          <div className="text-center mb-8">
+            <div className="w-20 h-20 bg-gradient-to-r from-purple-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
+              <MdCheck size={40} className="text-white" />
+            </div>
+            <h2 className="text-3xl font-bold mb-2">Quiz Complete!</h2>
+            <p className="text-gray-400">{questionData.title}</p>
+            {moduleStatus && moduleStatus.completed && (
+              <div className="mt-4 text-green-400">
+                <p>Module completed successfully!</p>
+                {moduleStatus.nextModuleUnlocked && (
+                  <p className="text-sm mt-2">Next module has been unlocked</p>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-3 gap-4 mb-8">
+            <div className="bg-gray-700/30 rounded-xl p-4 text-center">
+              <div className="text-3xl font-bold text-purple-400 mb-1">
+                {score}/{totalQuestions}
+              </div>
+              <div className="text-sm text-gray-400">Total Score</div>
+            </div>
+            <div className="bg-gray-700/30 rounded-xl p-4 text-center">
+              <div className="text-3xl font-bold text-blue-400 mb-1">
+                {Math.round((score / totalQuestions) * 100)}%
+              </div>
+              <div className="text-sm text-gray-400">Accuracy</div>
+            </div>
+            <div className="bg-gray-700/30 rounded-xl p-4 text-center">
+              <div className="text-3xl font-bold text-green-400 mb-1">
+                {Object.values(selectedAnswers).filter(a => a.isCorrect).length}
+              </div>
+              <div className="text-sm text-gray-400">Correct Answers</div>
+            </div>
+          </div>
+
+          <div className="flex justify-center">
+            <button
+              onClick={() => navigate("/practice")}
+              className="px-6 py-3 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-lg hover:from-purple-700 hover:to-purple-800 transition-all transform hover:scale-105 shadow-lg flex items-center"
+            >
+              <MdArrowBack className="mr-2" /> Back to Practice
+            </button>
+          </div>
+        </div>
+
+        {/* Questions Review */}
+        <div className="space-y-6">
+          {questionData.questions.map((question, index) => {
+            const answerData = selectedAnswers[index];
+            const isAnswered = answerData?.selectedOption >= 0;
+            
+            return (
+              <div
+                key={index}
+                id={`question-${index}`}
+                className="bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700/50 overflow-hidden"
+              >
+                {/* Question Header */}
+                <div className="p-6 border-b border-gray-700/50">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center bg-gray-700">
+                      <span className="text-gray-300 font-semibold">{index + 1}</span>
+                    </div>
+                    <h3 className="font-semibold text-lg text-gray-200 flex-1">
+                      {question.question}
+                    </h3>
+                    <div className={`px-3 py-1 rounded-full text-sm ${
+                      !isAnswered 
+                        ? "bg-yellow-500/20 text-yellow-300 border border-yellow-500/30"
+                        : answerData?.isCorrect 
+                          ? "bg-green-500/20 text-green-300 border border-green-500/30" 
+                          : "bg-red-500/20 text-red-300 border border-red-500/30"
+                    }`}>
+                      {!isAnswered ? "Not Attempted" : (answerData?.isCorrect ? "Correct" : "Incorrect")}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Options */}
+                <div className="p-6">
+                  <div className="space-y-3">
+                    {question.options.map((option, optIndex) => {
+                      // Get the selected option and check if current option is correct
+                      const isSelected = answerData?.selectedOption === optIndex;
+                      const isCorrect = option.isCorrect;
+                      const wasAttempted = typeof answerData?.selectedOption !== 'undefined';
+                      
+                      let optionClass = "";
+                      let textClass = "";
+                      
+                      if (isCorrect) {
+                        // Correct answer is always green
+                        optionClass = "bg-green-500/20 border-green-500/30";
+                        textClass = "text-green-300";
+                      } else if (isSelected) {
+                        // Selected wrong answer is red
+                        optionClass = "bg-red-500/20 border-red-500/30";
+                        textClass = "text-red-300";
+                      } else {
+                        // Unselected and incorrect options
+                        optionClass = "bg-gray-700/30 border-gray-600/50";
+                        textClass = "text-gray-300";
+                      }
+                      
+                      return (
+                        <div
+                          key={optIndex}
+                          className={`p-4 rounded-lg border ${optionClass}`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center flex-1">
+                              <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center mr-3 ${
+                                isCorrect 
+                                  ? "border-green-500" 
+                                  : isSelected 
+                                    ? "border-red-500"
+                                    : "border-gray-500"
+                              }`}>
+                                {(isSelected || isCorrect) && (
+                                  <div className={`w-2 h-2 rounded-full ${
+                                    isCorrect 
+                                      ? "bg-green-500" 
+                                      : isSelected ? "bg-red-500" : ""
+                                  }`}></div>
+                                )}
+                              </div>
+                              <span className={textClass}>
+                                {option.text}
+                              </span>
+                            </div>
+                            <div className="ml-4">
+                              {isCorrect && (
+                                <div className="flex items-center text-green-400">
+                                  <MdCheck size={20} />
+                                  <span className="ml-2 text-xs">Correct Answer</span>
+                                </div>
+                              )}
+                              {isSelected && !isCorrect && (
+                                <div className="flex items-center text-red-400">
+                                  <MdClose size={20} />
+                                  <span className="ml-2 text-xs">Incorrect</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          {isCorrect && (
+                            <div className="mt-2 text-xs text-green-400 flex items-center gap-1">
+                              <MdInfo size={14} />
+                              {isSelected 
+                                ? "Well done! This was the correct answer"
+                                : wasAttempted 
+                                  ? "This was the correct answer"
+                                  : "This is the correct answer"}
+                            </div>
+                          )}
+                          {isSelected && !isCorrect && (
+                            <div className="mt-2 text-xs text-red-400 flex items-center gap-1">
+                              <MdInfo size={14} />
+                              Your selection was incorrect
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Explanation */}
+                  <div className="mt-4 p-4 rounded-lg bg-blue-500/10 border border-blue-500/30">
+                    <div className="flex items-center gap-2 text-blue-300 mb-2">
+                      <MdInfo size={20} />
+                      <span className="font-medium">Explanation</span>
+                    </div>
+                    <div className="text-gray-300">
+                      {question.explanation || "No explanation provided for this question."}
+                    </div>
+                  </div>
+                </div>
+                
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div
@@ -359,192 +577,12 @@ const McqQuestion = () => {
                 </div>
               </div>
             ) : (
-              <div className="space-y-6">
-                {/* Results Summary Card */}
-                <div className="bg-gray-800/50 backdrop-blur-sm rounded-2xl p-8 border border-gray-700/50 mb-8">
-                  <div className="text-center mb-8">
-                    <div className="w-20 h-20 bg-gradient-to-r from-purple-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <MdCheck size={40} className="text-white" />
-                    </div>
-                    <h2 className="text-3xl font-bold mb-2">Quiz Complete!</h2>
-                    <p className="text-gray-400">{questionData.title}</p>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-4 mb-8">
-                    <div className="bg-gray-700/30 rounded-xl p-4 text-center">
-                      <div className="text-3xl font-bold text-purple-400 mb-1">
-                        {score}/{totalQuestions}
-                      </div>
-                      <div className="text-sm text-gray-400">Total Score</div>
-                    </div>
-                    <div className="bg-gray-700/30 rounded-xl p-4 text-center">
-                      <div className="text-3xl font-bold text-blue-400 mb-1">
-                        {Math.round((score / totalQuestions) * 100)}%
-                      </div>
-                      <div className="text-sm text-gray-400">Accuracy</div>
-                    </div>
-                    <div className="bg-gray-700/30 rounded-xl p-4 text-center">
-                      <div className="text-3xl font-bold text-green-400 mb-1">
-                        {Object.values(selectedAnswers).filter(a => a.isCorrect).length}
-                      </div>
-                      <div className="text-sm text-gray-400">Correct Answers</div>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-center">
-                    <button
-                      onClick={() => navigate("/practice")}
-                      className="px-6 py-3 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-lg hover:from-purple-700 hover:to-purple-800 transition-all transform hover:scale-105 shadow-lg flex items-center"
-                    >
-                      <MdArrowBack className="mr-2" /> Back to Practice
-                    </button>
-                  </div>
-                </div>
-
-                {/* Questions Review */}
-                <div className="space-y-6">
-                  {questionData.questions.map((question, index) => {
-                    const answerData = selectedAnswers[index];
-                    const isAnswered = answerData?.selectedOption >= 0;
-                    
-                    return (
-                      <div
-                        key={index}
-                        id={`question-${index}`}
-                        className="bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700/50 overflow-hidden"
-                      >
-                        {/* Question Header */}
-                        <div className="p-6 border-b border-gray-700/50">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full flex items-center justify-center bg-gray-700">
-                              <span className="text-gray-300 font-semibold">{index + 1}</span>
-                            </div>
-                            <h3 className="font-semibold text-lg text-gray-200 flex-1">
-                              {question.question}
-                            </h3>
-                            <div className={`px-3 py-1 rounded-full text-sm ${
-                              !isAnswered 
-                                ? "bg-yellow-500/20 text-yellow-300 border border-yellow-500/30"
-                                : answerData?.isCorrect 
-                                  ? "bg-green-500/20 text-green-300 border border-green-500/30" 
-                                  : "bg-red-500/20 text-red-300 border border-red-500/30"
-                            }`}>
-                              {!isAnswered ? "Not Attempted" : (answerData?.isCorrect ? "Correct" : "Incorrect")}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Options */}
-                        <div className="p-6">
-                          <div className="space-y-3">
-                            {question.options.map((option, optIndex) => {
-                              // Get the selected option and check if current option is correct
-                              const isSelected = answerData?.selectedOption === optIndex;
-                              const isCorrect = option.isCorrect;
-                              const wasAttempted = typeof answerData?.selectedOption !== 'undefined';
-                              
-                              let optionClass = "";
-                              let textClass = "";
-                              
-                              if (isCorrect) {
-                                // Correct answer is always green
-                                optionClass = "bg-green-500/20 border-green-500/30";
-                                textClass = "text-green-300";
-                              } else if (isSelected) {
-                                // Selected wrong answer is red
-                                optionClass = "bg-red-500/20 border-red-500/30";
-                                textClass = "text-red-300";
-                              } else {
-                                // Unselected and incorrect options
-                                optionClass = "bg-gray-700/30 border-gray-600/50";
-                                textClass = "text-gray-300";
-                              }
-                              
-                              return (
-                                <div
-                                  key={optIndex}
-                                  className={`p-4 rounded-lg border ${optionClass}`}
-                                >
-                                  <div className="flex items-center justify-between">
-                                    <div className="flex items-center flex-1">
-                                      <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center mr-3 ${
-                                        isCorrect 
-                                          ? "border-green-500" 
-                                          : isSelected 
-                                            ? "border-red-500"
-                                            : "border-gray-500"
-                                      }`}>
-                                        {(isSelected || isCorrect) && (
-                                          <div className={`w-2 h-2 rounded-full ${
-                                            isCorrect 
-                                              ? "bg-green-500" 
-                                              : isSelected ? "bg-red-500" : ""
-                                          }`}></div>
-                                        )}
-                                      </div>
-                                      <span className={textClass}>
-                                        {option.text}
-                                      </span>
-                                    </div>
-                                    <div className="ml-4">
-                                      {isCorrect && (
-                                        <div className="flex items-center text-green-400">
-                                          <MdCheck size={20} />
-                                          <span className="ml-2 text-xs">Correct Answer</span>
-                                        </div>
-                                      )}
-                                      {isSelected && !isCorrect && (
-                                        <div className="flex items-center text-red-400">
-                                          <MdClose size={20} />
-                                          <span className="ml-2 text-xs">Incorrect</span>
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                  {isCorrect && (
-                                    <div className="mt-2 text-xs text-green-400 flex items-center gap-1">
-                                      <MdInfo size={14} />
-                                      {isSelected 
-                                        ? "Well done! This was the correct answer"
-                                        : wasAttempted 
-                                          ? "This was the correct answer"
-                                          : "This is the correct answer"}
-                                    </div>
-                                  )}
-                                  {isSelected && !isCorrect && (
-                                    <div className="mt-2 text-xs text-red-400 flex items-center gap-1">
-                                      <MdInfo size={14} />
-                                      Your selection was incorrect
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-
-                          {/* Explanation */}
-                          <div className="mt-4 p-4 rounded-lg bg-blue-500/10 border border-blue-500/30">
-                            <div className="flex items-center gap-2 text-blue-300 mb-2">
-                              <MdInfo size={20} />
-                              <span className="font-medium">Explanation</span>
-                            </div>
-                            <div className="text-gray-300">
-                              {question.explanation || "No explanation provided for this question."}
-                            </div>
-                          </div>
-                        </div>
-                        
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+              renderResults()
             )}
           </div>
 
           {/* Right Sidebar */}
           {!showResults ? (
-            // Question Navigation during quiz
             <div className="w-80">
               <div className="bg-gray-800/50 backdrop-blur-sm rounded-2xl p-6 sticky top-24 border border-gray-700/50">
                 <div className="mb-6">
@@ -594,7 +632,6 @@ const McqQuestion = () => {
               </div>
             </div>
           ) : (
-            // Quick Jump Navigation after submission
             <div className="w-80">
               <div className="bg-gray-800/50 backdrop-blur-sm rounded-2xl p-6 sticky top-24 border border-gray-700/50">
                 <h3 className="text-lg font-semibold mb-4">Questions Review</h3>
@@ -618,24 +655,7 @@ const McqQuestion = () => {
                               : "border border-red-500/30"
                         }`}
                       >
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                          !isAnswered
-                            ? "bg-yellow-500/20 text-yellow-300"
-                            : answerData?.isCorrect
-                              ? "bg-green-500/20 text-green-300"
-                              : "bg-red-500/20 text-red-300"
-                        }`}>
-                          {index + 1}
-                        </div>
-                        <div className={`text-xs ${
-                          !isAnswered
-                            ? "text-yellow-300"
-                            : answerData?.isCorrect
-                              ? "text-green-300"
-                              : "text-red-300"
-                        }`}>
-                          {!isAnswered ? "Not Attempted" : (answerData?.isCorrect ? "Correct" : "Incorrect")}
-                        </div>
+                        {index + 1}
                       </button>
                     );
                   })}
