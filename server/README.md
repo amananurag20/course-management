@@ -1,6 +1,6 @@
 # Course Management System Backend
 
-This is the backend server for the Course Management System, built with Express.js and MongoDB.
+This is the backend server for the Course Management System, built with Express.js and MongoDB.hi
 
 ## Features
 
