@@ -1,4 +1,3 @@
-// Updated Notes.js
 import React, { useState } from 'react';
 import { MdNoteAdd, MdTimer, MdClose, MdEdit, MdDelete, MdSave } from 'react-icons/md';
 import RichTextEditor from './RichTextEditor';
@@ -24,6 +23,7 @@ const Notes = ({
   const [textAlignment, setTextAlignment] = useState('left');
   const [activeFormats, setActiveFormats] = useState(new Set());
 
+  // Function to check if format is active
   const isFormatActive = (command) => {
     try {
       return document.queryCommandState(command);
@@ -32,12 +32,14 @@ const Notes = ({
     }
   };
 
+  // Function to check text alignment
   const checkTextAlignment = () => {
     if (isFormatActive('justifyCenter')) return 'center';
     if (isFormatActive('justifyRight')) return 'right';
     return 'left';
   };
 
+  // Function to update active formats
   const updateActiveFormats = () => {
     const formats = new Set();
     ['bold', 'italic', 'underline', 'insertUnorderedList', 'insertOrderedList'].forEach(format => {
@@ -49,16 +51,26 @@ const Notes = ({
     setTextAlignment(checkTextAlignment());
   };
 
+  // Function to handle editor command
   const handleEditorCommand = (command) => {
     if (command.startsWith('justify')) {
       setTextAlignment(command === 'justifyLeft' ? 'left' : command === 'justifyCenter' ? 'center' : 'right');
     }
   };
 
+  // Function to toggle text direction
   const toggleTextDirection = () => {
     setTextDirection(prev => prev === 'ltr' ? 'rtl' : 'ltr');
   };
 
+  // Function to parse timestamp (mm:ss)
+  const parseTimestamp = (input) => {
+    const [minutes, seconds] = input.split(":").map(Number);
+    if (isNaN(minutes) || isNaN(seconds) || seconds >= 60) return null;
+    return minutes * 60 + seconds;
+  };
+
+  // Function to handle timestamp input change
   const handleTimestampChange = (e) => {
     const value = e.target.value;
     if (value.length <= 5) {
@@ -66,43 +78,73 @@ const Notes = ({
     }
   };
 
+  // Function to handle timestamp input blur
   const handleTimestampBlur = () => {
     if (/^[0-9]{1,2}:[0-5][0-9]$/.test(timestampInput)) {
-      const [minutes, seconds] = timestampInput.split(":").map(Number);
-      if (!isNaN(minutes) && !isNaN(seconds) && seconds < 60) {
-        const totalSeconds = minutes * 60 + seconds;
-        setCustomTimestamp(totalSeconds);
+      const seconds = parseTimestamp(timestampInput);
+      if (seconds !== null) {
+        setCustomTimestamp(seconds);
       }
     }
     setEditingTimestamp(false);
   };
 
+  // Function to handle timestamp input key press
+  const handleTimestampKeyPress = (e) => {
+    if (e.key === 'Enter') {
+      handleTimestampBlur();
+    }
+  };
+
+  // Function to get current timestamp value
+  const getCurrentTimestamp = () => {
+    // If editing timestamp, use custom timestamp, otherwise use video time
+    if (editingTimestamp) {
+      return customTimestamp !== null ? customTimestamp : currentVideoTime;
+    }
+    // Always use current video time when not editing
+    return currentVideoTime;
+  };
+
+  // Function to handle note content change
   const handleContentChange = (content) => {
     if (editingNoteId) {
       setEditingContent(content);
     } else {
       setEditorContent(content);
+      // Reset custom timestamp when content changes
+      setCustomTimestamp(null);
     }
+    // Update formats after content change
     requestAnimationFrame(updateActiveFormats);
+  };
+
+  // Function to reset note form
+  const resetNoteForm = () => {
+    setIsAddingNote(false);
+    setEditorContent("");
+    setActiveFormats(new Set());
+    setTextAlignment('left');
+    setIncludeTimestamp(true);
+    setCustomTimestamp(null);
+    setTimestampInput("");
   };
 
   return (
     <div className="bg-gray-800/30 rounded-xl p-6 backdrop-blur-sm shadow-lg">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold flex items-center">
-          <MdNoteAdd className="mr-2" /> Notes
-        </h3>
+      {/* Add Note Button */}
+      {!isAddingNote && (
         <button
-          onClick={() => {
-            setIsAddingNote(true);
-            setCustomTimestamp(null);
-          }}
-          className="px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg transition-all duration-200 flex items-center"
+          onClick={() => setIsAddingNote(true)}
+          className="w-full px-4 py-3 bg-gray-700/30 hover:bg-gray-700/50 
+            rounded-lg transition-all duration-200 flex items-center justify-center"
         >
-          <MdNoteAdd className="mr-2" /> Add Note
+          <MdNoteAdd className="mr-2" size={20} />
+          <span>Add Note</span>
         </button>
-      </div>
+      )}
 
+      {/* Add Note Form */}
       {isAddingNote && (
         <div className="mb-6 bg-gray-700/30 rounded-lg p-4">
           <RichTextEditor
@@ -116,6 +158,7 @@ const Notes = ({
             onDirectionToggle={toggleTextDirection}
           />
 
+          {/* Timestamp Section */}
           <div className="flex items-center space-x-2 mt-4">
             {includeTimestamp ? (
               <div className="flex items-center space-x-2">
@@ -127,6 +170,7 @@ const Notes = ({
                       value={timestampInput}
                       onChange={handleTimestampChange}
                       onBlur={handleTimestampBlur}
+                      onKeyPress={handleTimestampKeyPress}
                       className="w-16 bg-transparent text-blue-400 text-center focus:outline-none"
                       placeholder="mm:ss"
                       autoFocus
@@ -135,12 +179,12 @@ const Notes = ({
                     <button
                       onClick={() => {
                         setEditingTimestamp(true);
-                        setTimestampInput(formatTimestamp(customTimestamp !== null ? customTimestamp : currentVideoTime));
+                        setTimestampInput(formatTimestamp(getCurrentTimestamp()));
                       }}
                       className="text-blue-400 hover:text-blue-300 transition-colors"
                       title="Click to edit timestamp"
                     >
-                      {formatTimestamp(customTimestamp !== null ? customTimestamp : currentVideoTime)}
+                      {formatTimestamp(getCurrentTimestamp())}
                     </button>
                   )}
                 </div>
@@ -159,26 +203,24 @@ const Notes = ({
               <button
                 onClick={() => {
                   setIncludeTimestamp(true);
-                  setTimestampInput(formatTimestamp(currentVideoTime));
                   setCustomTimestamp(null);
+                  setTimestampInput(formatTimestamp(currentVideoTime));
                 }}
-                className="flex items-center px-3 py-1.5 rounded-lg transition-colors bg-gray-600/50 text-gray-400 hover:bg-gray-600/70 hover:text-gray-300"
+                className="flex items-center px-3 py-1.5 rounded-lg transition-colors
+                  bg-gray-600/50 text-gray-400 hover:bg-gray-600/70 hover:text-gray-300"
               >
-                <MdTimer className="mr-1.5" /> Add Timestamp
+                <MdTimer className="mr-1.5" />
+                Add Timestamp
               </button>
             )}
           </div>
 
+          {/* Action Buttons */}
           <div className="flex justify-end space-x-2 mt-4">
             <button
-              onClick={() => {
-                setIsAddingNote(false);
-                setEditorContent("");
-                setActiveFormats(new Set());
-                setTextAlignment('left');
-                setCustomTimestamp(null);
-              }}
-              className="px-4 py-2 bg-gray-600/50 hover:bg-gray-600/70 text-gray-300 rounded-lg transition-colors"
+              onClick={resetNoteForm}
+              className="px-4 py-2 bg-gray-600/50 hover:bg-gray-600/70 
+                text-gray-300 rounded-lg transition-colors"
             >
               Cancel
             </button>
@@ -187,18 +229,15 @@ const Notes = ({
                 onAddNote({
                   content: editorContent,
                   includeTimestamp,
-                  timestamp: includeTimestamp ? (customTimestamp !== null ? customTimestamp : currentVideoTime) : null,
+                  timestamp: includeTimestamp ? getCurrentTimestamp() : null
                 });
-                setIsAddingNote(false);
-                setEditorContent("");
-                setActiveFormats(new Set());
-                setTextAlignment('left');
-                setCustomTimestamp(null);
+                resetNoteForm();
               }}
               disabled={!editorContent.trim()}
-              className={`px-4 py-2 rounded-lg transition-colors ${!editorContent.trim()
-                ? 'bg-gray-600/50 text-gray-500 cursor-not-allowed'
-                : 'bg-blue-500/20 hover:bg-blue-500/30 text-blue-400'}`}
+              className={`px-4 py-2 rounded-lg transition-colors
+                ${!editorContent.trim() 
+                  ? 'bg-gray-600/50 text-gray-500 cursor-not-allowed' 
+                  : 'bg-blue-500/20 hover:bg-blue-500/30 text-blue-400'}`}
             >
               Save Note
             </button>
@@ -223,7 +262,8 @@ const Notes = ({
                   onDirectionToggle={toggleTextDirection}
                   isEditing={true}
                 />
-
+                
+                {/* Edit Mode Buttons */}
                 <div className="flex justify-end space-x-2">
                   <button
                     onClick={() => {
@@ -232,7 +272,8 @@ const Notes = ({
                       setActiveFormats(new Set());
                       setTextAlignment('left');
                     }}
-                    className="px-3 py-1.5 rounded-lg bg-gray-600/50 hover:bg-gray-600/70 text-gray-300 text-sm flex items-center"
+                    className="px-3 py-1.5 rounded-lg bg-gray-600/50 hover:bg-gray-600/70 
+                      text-gray-300 text-sm flex items-center"
                   >
                     <MdClose className="mr-1.5" /> Cancel
                   </button>
@@ -244,7 +285,8 @@ const Notes = ({
                       setActiveFormats(new Set());
                       setTextAlignment('left');
                     }}
-                    className="px-3 py-1.5 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 text-sm flex items-center"
+                    className="px-3 py-1.5 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 
+                      text-blue-400 text-sm flex items-center"
                   >
                     <MdSave className="mr-1.5" /> Save
                   </button>
@@ -258,7 +300,8 @@ const Notes = ({
                     {note.timestamp !== null && (
                       <button
                         onClick={() => onSeekToTimestamp(note.timestamp)}
-                        className="ml-2 flex items-center text-blue-400 hover:text-blue-300 transition-colors px-2 py-0.5 rounded hover:bg-blue-500/10 group cursor-pointer"
+                        className="ml-2 flex items-center text-blue-400 hover:text-blue-300 
+                          transition-colors px-2 py-0.5 rounded hover:bg-blue-500/10 group cursor-pointer"
                         title="Click to jump to this time in the video"
                       >
                         <MdTimer className="mr-1 group-hover:animate-pulse" />
@@ -275,21 +318,23 @@ const Notes = ({
                         setActiveFormats(new Set());
                         setTextAlignment('left');
                       }}
-                      className="p-1.5 rounded hover:bg-gray-600/50 text-gray-400 hover:text-gray-300 transition-colors"
+                      className="p-1.5 rounded hover:bg-gray-600/50 text-gray-400 
+                        hover:text-gray-300 transition-colors"
                     >
                       <MdEdit size={18} />
                     </button>
                     <button
                       onClick={() => onDeleteNote(note._id)}
-                      className="p-1.5 rounded hover:bg-gray-600/50 text-gray-400 hover:text-red-400 transition-colors"
+                      className="p-1.5 rounded hover:bg-gray-600/50 text-gray-400 
+                        hover:text-red-400 transition-colors"
                     >
                       <MdDelete size={18} />
                     </button>
                   </div>
                 </div>
-                <div
+                <div 
                   className="text-gray-200 text-sm"
-                  style={{ direction: 'ltr' }}
+                  style={{ direction: textDirection }}
                   dangerouslySetInnerHTML={{ __html: note.content }}
                 />
               </div>
@@ -301,4 +346,4 @@ const Notes = ({
   );
 };
 
-export default Notes;
+export default Notes; 

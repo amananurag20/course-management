@@ -196,8 +196,8 @@ const VideoPlayer = forwardRef(({ videoId, onTimeUpdate }, ref) => {
               // Handle different player states
               switch (playerState) {
                 case YT.PlayerState.ENDED:
-                  setIsPlaying(false);
-                  setProgress(100);
+                setIsPlaying(false);
+                setProgress(100);
                   handleTimeUpdate(duration);
                   break;
                 case YT.PlayerState.PLAYING:
