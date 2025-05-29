@@ -69,9 +69,55 @@ const getCourseById = async (req, res) => {
       return res.status(404).json({ message: "Course not found" });
     }
 
-    // Resources are already embedded in the modules, no need to populate
-    console.log("Course data:", JSON.stringify(course, null, 2));
-    res.json(course);
+    // Get user ID from request
+    const userId = req.user?._id;
+    console.log("userId",req.user);
+
+    // Process modules to control data access
+    const processedModules = course.modules.map((module, index) => {
+      // Convert module to plain object for manipulation
+      const moduleObj = module.toObject();
+
+      // First module is always accessible with full data
+      if (index === 0) {
+        return moduleObj;
+      }
+
+      // For other modules, check if previous module has MCQ and completion status
+      const prevModule = course.modules[index - 1];
+      
+      // If previous module has no MCQ, automatically give access to current module
+      if (!prevModule.mcqQuestion) {
+        return moduleObj;
+      }
+
+      // If previous module has MCQ, check if user has completed it
+      const userExistsInPrevModule = prevModule.completedBy?.some(
+        completion => completion.user.toString() === userId?.toString()
+      );
+
+      // If user exists in previous module's completedBy, send full data
+      if (userExistsInPrevModule) {
+        return moduleObj;
+      }
+
+      // If module is locked, remove resource URLs
+      return {
+        ...moduleObj,
+        resources: moduleObj.resources.map(resource => ({
+          _id: resource._id,
+          title: resource.title,
+          type: resource.type
+        }))
+      };
+    });
+
+    const processedCourse = {
+      ...course.toObject(),
+      modules: processedModules
+    };
+
+    res.json(processedCourse);
   } catch (error) {
     res
       .status(500)

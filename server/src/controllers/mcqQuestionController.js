@@ -170,6 +170,7 @@ exports.submitQuiz = async (req, res) => {
   try {
     const { id } = req.params;
     const { answers, timeTaken, questionData, courseId, moduleIndex } = req.body;
+    console.log("data",req.body);
     
     // Get user ID from auth
     const userId = req.user?._id;
@@ -216,9 +217,10 @@ exports.submitQuiz = async (req, res) => {
       timeTaken: timeTaken || 0,
       passed
     });
-
+     
+    console.log("courseId",courseId,moduleIndex);
     // If this MCQ is part of a course module, update course completion
-    if (courseId && typeof moduleIndex !== 'undefined') {
+    if (courseId && typeof moduleIndex !== 'undefined' && passed) {
       try {
         const course = await Course.findById(courseId);
         if (!course) {
@@ -226,6 +228,7 @@ exports.submitQuiz = async (req, res) => {
         }
 
         // Mark module completion in the course
+        console.log("mcqPassed",passed);
         course.markModuleCompleted(parseInt(moduleIndex), userId, {
           mcqScore: score,
           mcqPassed: passed

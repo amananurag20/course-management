@@ -15,6 +15,33 @@ const resourceSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  notes: [{
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true
+    },
+    content: {
+      type: String,
+      required: true
+    },
+    includeTimestamp: {
+      type: Boolean,
+      default: false
+    },
+    timestamp: {
+      type: Number,  // For video resources, store timestamp in seconds
+      default: null
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now
+    },
+    updatedAt: {
+      type: Date,
+      default: Date.now
+    }
+  }]
 });
 
 // Define a separate schema for modules
@@ -36,10 +63,7 @@ const moduleSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: "Problem",  // Assuming you have a Problem model
   },
-  isCompleted: {
-    type: Boolean,
-    default: false,
-  },
+ 
   completedBy: [{
     user: {
       type: mongoose.Schema.Types.ObjectId,
@@ -54,11 +78,11 @@ const moduleSchema = new mongoose.Schema({
       type: Boolean,
       default: false
     },
-    problemScore: Number,
-    problemPassed: {
-      type: Boolean,
-      default: true
-    }
+    // problemScore: Number,
+    // problemPassed: {
+    //   type: Boolean,
+    //   default: true
+    // }
   }]
 });
 
@@ -127,23 +151,24 @@ courseSchema.methods.isModuleUnlocked = function(moduleIndex, userId) {
   
   if (!userCompletion) return false;
 
-  // If module has MCQ, check if user passed it
-  if (previousModule.mcqQuestion && !userCompletion.mcqPassed) {
-    return false;
+  // If module has MCQ, it must be passed to unlock next module
+  if (previousModule.mcqQuestion) {
+    return userCompletion.mcqPassed === true;
   }
 
-  // If module has problem, check if user passed it
-  if (previousModule.problem && !userCompletion.problemPassed) {
-    return false;
-  }
-
+  // If no MCQ requirement, module is considered completed
   return true;
 };
 
 // Method to mark a module as completed for a user
-courseSchema.methods.markModuleCompleted = function(moduleIndex, userId, { mcqScore = null, mcqPassed = false, problemScore = null, problemPassed = false } = {}) {
+courseSchema.methods.markModuleCompleted = function(moduleIndex, userId, { mcqScore = null, mcqPassed = false } = {}) {
   const module = this.modules[moduleIndex];
   if (!module) throw new Error("Module not found");
+
+  // If module has MCQ and user hasn't passed it, don't mark as completed
+  if (module.mcqQuestion && !mcqPassed) {
+    return false;
+  }
 
   // Remove any existing completion record for this user
   module.completedBy = module.completedBy.filter(
@@ -155,16 +180,10 @@ courseSchema.methods.markModuleCompleted = function(moduleIndex, userId, { mcqSc
     user: userId,
     completedAt: new Date(),
     mcqScore,
-    mcqPassed,
-    problemScore,
-    problemPassed
+    mcqPassed
   });
 
-  // Set module completion status based on requirements
-  const hasRequirements = module.mcqQuestion || module.problem;
-  const passedAllRequirements = (!module.mcqQuestion || mcqPassed) && (!module.problem || problemPassed);
-  
-  module.isCompleted = !hasRequirements || passedAllRequirements;
+  return true;
 };
 
 const Course = mongoose.model("Course", courseSchema);

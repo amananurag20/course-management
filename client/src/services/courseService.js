@@ -84,4 +84,36 @@ export const courseService = {
     });
     return response.data;
   },
+
+  // Get notes for a specific resource
+  getResourceNotes: async (courseId, moduleIndex, resourceIndex) => {
+    const response = await api.get(`/courses/${courseId}/modules/${moduleIndex}/resources/${resourceIndex}/notes`);
+    return response.data;
+  },
+
+  // Add a note to a resource
+  addResourceNote: async (courseId, moduleIndex, resourceIndex, noteData) => {
+    const response = await api.post(
+      `/courses/${courseId}/modules/${moduleIndex}/resources/${resourceIndex}/notes`,
+      noteData
+    );
+    return response.data;
+  },
+
+  // Update a note
+  updateResourceNote: async (courseId, moduleIndex, resourceIndex, noteId, noteData) => {
+    const response = await api.put(
+      `/courses/${courseId}/modules/${moduleIndex}/resources/${resourceIndex}/notes/${noteId}`,
+      noteData
+    );
+    return response.data;
+  },
+
+  // Delete a note
+  deleteResourceNote: async (courseId, moduleIndex, resourceIndex, noteId) => {
+    const response = await api.delete(
+      `/courses/${courseId}/modules/${moduleIndex}/resources/${resourceIndex}/notes/${noteId}`
+    );
+    return response.data;
+  },
 };

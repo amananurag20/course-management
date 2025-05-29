@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useSelector } from "react-redux";
-import { courseService } from "../services/courseService";
-import VideoPlayer from "./VideoPlayer";
-import { useSidebar } from "../context/SidebarContext";
+import { courseService } from "../../services/courseService";
+import VideoPlayer from "../VideoPlayer";
+import { useSidebar } from "../../context/SidebarContext";
+import Notes from "./Notes";
 import {
   MdPlayCircle,
   MdCheck,
@@ -17,6 +18,21 @@ import {
   MdLockOpen,
   MdQuiz,
   MdCode,
+  MdNoteAdd,
+  MdEdit,
+  MdDelete,
+  MdSave,
+  MdClose,
+  MdTimer,
+  MdTimerOff,
+  MdFormatBold,
+  MdFormatItalic,
+  MdFormatUnderlined,
+  MdFormatListBulleted,
+  MdFormatListNumbered,
+  MdFormatAlignLeft,
+  MdFormatAlignCenter,
+  MdFormatAlignRight,
 } from "react-icons/md";
 
 const CourseViewer = () => {
@@ -31,6 +47,25 @@ const CourseViewer = () => {
   const [error, setError] = useState(null);
   const [expandedModules, setExpandedModules] = useState(new Set([0]));
   const [unlockedModules, setUnlockedModules] = useState(new Set([0]));
+  const [notes, setNotes] = useState([]);
+  const [newNote, setNewNote] = useState("");
+  const [editingNoteId, setEditingNoteId] = useState(null);
+  const [currentVideoTime, setCurrentVideoTime] = useState(0);
+  const [includeTimestamp, setIncludeTimestamp] = useState(true);
+  const [isAddingNote, setIsAddingNote] = useState(false);
+  const [editingTimestamp, setEditingTimestamp] = useState(false);
+  const [timestampInput, setTimestampInput] = useState("");
+  const videoPlayerRef = useRef(null);
+  const [editorContent, setEditorContent] = useState("");
+  const [editingContent, setEditingContent] = useState("");
+  const [textAlignment, setTextAlignment] = useState('left');
+  const editorRef = useRef(null);
+  const [activeFormats, setActiveFormats] = useState(new Set());
+  const [textDirection, setTextDirection] = useState('ltr');
+
+  // Calculate current module and resource
+  const currentModule = course?.modules?.[currentModuleIndex];
+  const currentResource = currentModule?.resources?.[currentResourceIndex];
 
   // Function to extract YouTube video ID from URL
   const getYouTubeId = (url) => {
@@ -39,6 +74,8 @@ const CourseViewer = () => {
     const match = url.match(regExp);
     return match && match[2].length === 11 ? match[2] : null;
   };
+
+  console.log({user})
 
   useEffect(() => {
     const fetchCourse = async () => {
@@ -50,13 +87,20 @@ const CourseViewer = () => {
         // Initialize unlocked modules based on completion status
         const unlocked = new Set([0]); // First module always unlocked
         courseData.modules.forEach((module, index) => {
-          const prevModule = index > 0 ? courseData.modules[index - 1] : null;
-          if (prevModule) {
-            const isCompleted = prevModule.completedBy?.some(
-              completion => completion.user === user?.userId
-            );
-            if (isCompleted) {
+          if (index > 0) { // Skip first module as it's always unlocked
+            const prevModule = courseData.modules[index - 1];
+            
+            // If previous module has no MCQ, automatically unlock current module
+            if (!prevModule.mcqQuestion) {
               unlocked.add(index);
+            } else {
+              // Check if user has completed the MCQ in previous module
+              const isUserCompletedPrevModule = prevModule.completedBy?.some(
+                completion => completion.user === user?._id
+              );
+              if (isUserCompletedPrevModule) {
+                unlocked.add(index);
+              }
             }
           }
         });
@@ -69,11 +113,15 @@ const CourseViewer = () => {
     };
 
     fetchCourse();
-  }, [courseId, user?.userId]);
+  }, [courseId, user?._id]);
 
   const handleModuleChange = (index) => {
     if (!unlockedModules.has(index)) {
-      alert("Please complete the previous module first to unlock this one.");
+      const prevModule = course.modules[index - 1];
+      const message = prevModule.mcqQuestion 
+        ? "Please complete the previous module's quiz to unlock this module."
+        : "This module is currently locked.";
+      alert(message);
       return;
     }
     setCurrentModuleIndex(index);
@@ -82,7 +130,11 @@ const CourseViewer = () => {
 
   const handleResourceChange = (moduleIndex, resourceIndex) => {
     if (!unlockedModules.has(moduleIndex)) {
-      alert("This module is locked. Complete the previous module first.");
+      const prevModule = course.modules[moduleIndex - 1];
+      const message = prevModule.mcqQuestion 
+        ? "This module is locked. Complete the previous module's quiz first."
+        : "This module is currently locked.";
+      alert(message);
       return;
     }
     setCurrentModuleIndex(moduleIndex);
@@ -103,17 +155,329 @@ const CourseViewer = () => {
   };
 
   const handleLockedResourceClick = () => {
-    alert("This module is locked. Please complete the previous module first to unlock this content.");
+    const prevModule = course.modules[currentModuleIndex - 1];
+    const message = prevModule.mcqQuestion 
+      ? "This module is locked. Complete the previous module's quiz first to unlock this content."
+      : "This module is currently locked.";
+    alert(message);
   };
 
   const handleMcqClick = (mcqId) => {
     if (mcqId) {
-      navigate(`/practice/mcq/${mcqId}`);
+      navigate(`/practice/mcq/${mcqId}?courseId=${courseId}&moduleIndex=${currentModuleIndex}`);
     }
   };
 
   const isModuleLocked = (moduleIndex) => {
     return !unlockedModules.has(moduleIndex);
+  };
+
+  // Function to format seconds to mm:ss
+  const formatTimestamp = (seconds) => {
+    if (seconds === null || seconds === undefined) return "";
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = Math.floor(seconds % 60);
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+  };
+
+  // Function to parse timestamp input (mm:ss)
+  const parseTimestamp = (input) => {
+    const [minutes, seconds] = input.split(":").map(Number);
+    if (isNaN(minutes) || isNaN(seconds) || seconds >= 60) return null;
+    return minutes * 60 + seconds;
+  };
+
+  // Function to validate timestamp format
+  const validateTimestamp = (input) => {
+    return /^[0-9]{1,2}:[0-5][0-9]$/.test(input);
+  };
+
+  // Function to handle timestamp input change
+  const handleTimestampChange = (e) => {
+    const value = e.target.value;
+    if (value.length <= 5) {
+      setTimestampInput(value);
+    }
+  };
+
+  // Function to handle timestamp input blur
+  const handleTimestampBlur = () => {
+    if (validateTimestamp(timestampInput)) {
+      const seconds = parseTimestamp(timestampInput);
+      if (seconds !== null) {
+        setCurrentVideoTime(seconds);
+      }
+    }
+    setEditingTimestamp(false);
+  };
+
+  // Function to handle timestamp input key press
+  const handleTimestampKeyPress = (e) => {
+    if (e.key === 'Enter') {
+      handleTimestampBlur();
+    }
+  };
+
+  // Function to handle time update from video player
+  const handleTimeUpdate = (time) => {
+    setCurrentVideoTime(Math.floor(time));
+  };
+
+  // Function to fetch notes for current resource
+  const fetchNotes = async () => {
+    if (!course || !currentResource || !user?._id) return;
+    try {
+      const response = await courseService.getResourceNotes(courseId, currentModuleIndex, currentResourceIndex);
+      setNotes(response.notes);
+    } catch (error) {
+      console.error("Failed to fetch notes:", error);
+    }
+  };
+
+  // Add useEffect to fetch notes when resource changes
+  useEffect(() => {
+    if (course && currentResource && user?._id) {
+      fetchNotes();
+    } else {
+      setNotes([]); // Reset notes when no resource is selected
+    }
+  }, [course, currentModuleIndex, currentResourceIndex, user?._id]);
+
+  // Function to check if format is active
+  const isFormatActive = (command) => {
+    try {
+      return document.queryCommandState(command);
+    } catch (e) {
+      return false;
+    }
+  };
+
+  // Function to check text alignment
+  const checkTextAlignment = () => {
+    if (isFormatActive('justifyCenter')) return 'center';
+    if (isFormatActive('justifyRight')) return 'right';
+    return 'left';
+  };
+
+  // Function to update active formats
+  const updateActiveFormats = () => {
+    if (!editorRef.current) return;
+    
+    const formats = new Set();
+    ['bold', 'italic', 'underline', 'insertUnorderedList', 'insertOrderedList'].forEach(format => {
+      if (isFormatActive(format)) {
+        formats.add(format);
+      }
+    });
+    setActiveFormats(formats);
+    setTextAlignment(checkTextAlignment());
+  };
+
+  // Function to handle editor input with proper cursor positioning
+  const handleEditorInput = (e) => {
+    const content = e.currentTarget.innerHTML;
+    
+    // Save current selection before React updates
+    const selection = window.getSelection();
+    let cursorPosition = null;
+    
+    if (selection.rangeCount > 0) {
+      const range = selection.getRangeAt(0);
+      const preCaretRange = range.cloneRange();
+      preCaretRange.selectNodeContents(e.currentTarget);
+      preCaretRange.setEnd(range.endContainer, range.endOffset);
+      cursorPosition = preCaretRange.toString().length;
+    }
+
+    // Update content state
+    if (editingNoteId) {
+      setEditingContent(content);
+    } else {
+      setEditorContent(content);
+    }
+    updateActiveFormats();
+
+    // Restore cursor position after React re-render
+    if (cursorPosition !== null) {
+      requestAnimationFrame(() => {
+        if (!editorRef.current) return;
+
+        // Get all text nodes in the editor
+        const walker = document.createTreeWalker(
+          editorRef.current,
+          NodeFilter.SHOW_TEXT,
+          null,
+          false
+        );
+
+        let node;
+        let currentLength = 0;
+        let targetNode = null;
+        let targetOffset = 0;
+
+        // Find the text node and offset where cursor should be placed
+        while ((node = walker.nextNode())) {
+          const nodeLength = node.length;
+          if (currentLength + nodeLength >= cursorPosition) {
+            targetNode = node;
+            targetOffset = cursorPosition - currentLength;
+            break;
+          }
+          currentLength += nodeLength;
+        }
+
+        // If we found the target node, set the cursor position
+        if (targetNode) {
+          const newRange = document.createRange();
+          newRange.setStart(targetNode, targetOffset);
+          newRange.setEnd(targetNode, targetOffset);
+          
+          selection.removeAllRanges();
+          selection.addRange(newRange);
+        } else {
+          // If target node not found, move cursor to end
+          const newRange = document.createRange();
+          newRange.selectNodeContents(editorRef.current);
+          newRange.collapse(false);
+          selection.removeAllRanges();
+          selection.addRange(newRange);
+        }
+      });
+    }
+  };
+
+  // Function to handle editor key events with cursor control
+  const handleEditorKeyDown = (e) => {
+    e.stopPropagation(); // Prevent video player from capturing the event
+
+    // Handle special keys
+    if (e.key === 'Enter' && e.shiftKey) {
+      e.preventDefault();
+      document.execCommand('insertLineBreak', false, null);
+      return;
+    }
+
+    // Allow all navigation keys to work normally
+    if ([
+      'ArrowLeft',
+      'ArrowRight',
+      'ArrowUp',
+      'ArrowDown',
+      'Home',
+      'End',
+      'PageUp',
+      'PageDown',
+      'Backspace',
+      'Delete'
+    ].includes(e.key)) {
+      return; // Let default behavior handle these keys
+    }
+  };
+
+  // Function to toggle text direction
+  const toggleTextDirection = () => {
+    const newDirection = textDirection === 'ltr' ? 'rtl' : 'ltr';
+    setTextDirection(newDirection);
+    if (editorRef.current) {
+      editorRef.current.style.direction = newDirection;
+      editorRef.current.focus();
+    }
+  };
+
+  // Function to initialize editor content
+  const initializeEditor = (content = '') => {
+    if (editorRef.current) {
+      editorRef.current.innerHTML = content;
+      editorRef.current.focus();
+      
+      // Place cursor at the end
+      const range = document.createRange();
+      range.selectNodeContents(editorRef.current);
+      range.collapse(false);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+  };
+
+  // Update startEditingNote function
+  const startEditingNote = (note) => {
+    setEditingNoteId(note._id);
+    setEditingContent(note.content);
+    setTextDirection('ltr');
+    setActiveFormats(new Set());
+    setTextAlignment('left');
+    
+    // Initialize editor with content after state update
+    requestAnimationFrame(() => {
+      initializeEditor(note.content);
+    });
+  };
+
+  // Update useEffect for editor initialization
+  useEffect(() => {
+    if (isAddingNote) {
+      initializeEditor();
+    }
+  }, [isAddingNote]);
+
+  // Function to handle note saving
+  const handleAddNote = async (noteData) => {
+    try {
+      await courseService.addResourceNote(
+        courseId,
+        currentModuleIndex,
+        currentResourceIndex,
+        noteData
+      );
+      fetchNotes();
+    } catch (error) {
+      console.error("Failed to add note:", error);
+    }
+  };
+
+  // Function to update a note
+  const handleUpdateNote = async (noteId, content) => {
+    try {
+      await courseService.updateResourceNote(
+        courseId,
+        currentModuleIndex,
+        currentResourceIndex,
+        noteId,
+        { content }
+      );
+      fetchNotes();
+    } catch (error) {
+      console.error("Failed to update note:", error);
+    }
+  };
+
+  // Function to delete a note
+  const handleDeleteNote = async (noteId) => {
+    if (!window.confirm("Are you sure you want to delete this note?")) return;
+
+    try {
+      await courseService.deleteResourceNote(
+        courseId,
+        currentModuleIndex,
+        currentResourceIndex,
+        noteId
+      );
+      fetchNotes();
+    } catch (error) {
+      console.error("Failed to delete note:", error);
+    }
+  };
+
+  // Function to seek to specific time in video
+  const handleSeekToTimestamp = (timestamp) => {
+    if (videoPlayerRef.current && timestamp !== null) {
+      videoPlayerRef.current.seekTo(Math.floor(timestamp));
+      const videoElement = document.querySelector('.video-container');
+      if (videoElement) {
+        videoElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
   };
 
   if (loading) return <div className="min-h-screen bg-gray-900 flex items-center justify-center">
@@ -128,8 +492,6 @@ const CourseViewer = () => {
     <div className="text-white">Course not found</div>
   </div>;
 
-  const currentModule = course.modules[currentModuleIndex];
-  const currentResource = currentModule?.resources?.[currentResourceIndex];
   const videoId = currentResource?.type === "video" ? getYouTubeId(currentResource.url) : null;
 
   return (
@@ -162,11 +524,15 @@ const CourseViewer = () => {
               {/* Video Container */}
               {!isModuleLocked(currentModuleIndex) && (
                 <>
-                  <div className="bg-gray-800/50 rounded-xl overflow-hidden shadow-lg">
+                  <div className="video-container bg-gray-800/50 rounded-xl overflow-hidden shadow-lg">
                     <div className="relative" style={{ paddingTop: "56.25%" }}>
                       {videoId ? (
                         <div className="absolute inset-0">
-                          <VideoPlayer videoId={videoId} />
+                          <VideoPlayer
+                            ref={videoPlayerRef}
+                            videoId={videoId}
+                            onTimeUpdate={handleTimeUpdate}
+                          />
                         </div>
                       ) : (
                         <div className="absolute inset-0 flex items-center justify-center">
@@ -188,6 +554,17 @@ const CourseViewer = () => {
                       <p className="text-gray-300 text-sm leading-relaxed">{currentModule.content}</p>
                     </div>
                   </div>
+
+                  {/* Notes Section */}
+                  <Notes
+                    notes={notes}
+                    currentVideoTime={currentVideoTime}
+                    onAddNote={handleAddNote}
+                    onUpdateNote={handleUpdateNote}
+                    onDeleteNote={handleDeleteNote}
+                    onSeekToTimestamp={handleSeekToTimestamp}
+                    formatTimestamp={formatTimestamp}
+                  />
 
                   {/* Navigation */}
                   <div className="flex justify-between items-center">
@@ -356,3 +733,30 @@ const CourseViewer = () => {
 };
 
 export default CourseViewer;
+
+<style jsx>{`
+  .editor-content {
+    position: relative;
+  }
+  .editor-content:empty:before {
+    content: attr(placeholder);
+    position: absolute;
+    color: #6B7280;
+    pointer-events: none;
+  }
+  .editor-content[contenteditable="true"] {
+    -webkit-user-modify: read-write-plaintext-only;
+    user-modify: read-write-plaintext-only;
+    overflow-wrap: break-word;
+    -webkit-line-break: after-white-space;
+    line-break: after-white-space;
+  }
+  .editor-content p {
+    margin: 0;
+    min-height: 1.2em;
+  }
+  .editor-content div {
+    margin: 0;
+    min-height: 1.2em;
+  }
+`}</style>

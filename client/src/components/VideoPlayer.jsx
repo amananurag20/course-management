@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, forwardRef } from "react";
 import {
   MdPlayCircle,
   MdPause,
@@ -8,8 +8,9 @@ import {
   MdSettings,
   MdVolumeDown,
 } from "react-icons/md";
+import YouTube from 'react-youtube';
 
-const VideoPlayer = ({ videoId, onLoad }) => {
+const VideoPlayer = forwardRef(({ videoId, onTimeUpdate }, ref) => {
   const [isLoading, setIsLoading] = useState(true);
   const [player, setPlayer] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -25,6 +26,16 @@ const VideoPlayer = ({ videoId, onLoad }) => {
   const playerWrapperRef = useRef(null);
   const volumeControlRef = useRef(null);
   const settingsRef = useRef(null);
+
+  const opts = {
+    height: '100%',
+    width: '100%',
+    playerVars: {
+      autoplay: 0,
+      modestbranding: 1,
+      rel: 0,
+    },
+  };
 
   // Handle click outside for settings and volume
   useEffect(() => {
@@ -102,6 +113,14 @@ const VideoPlayer = ({ videoId, onLoad }) => {
     };
   }, [player]);
 
+  // Function to handle time updates
+  const handleTimeUpdate = (currentTime) => {
+    if (onTimeUpdate && !isNaN(currentTime)) {
+      setProgress((currentTime / duration) * 100);
+      onTimeUpdate(currentTime);
+    }
+  };
+
   useEffect(() => {
     let youtubeScript;
     const loadYouTubeAPI = () => {
@@ -158,6 +177,9 @@ const VideoPlayer = ({ videoId, onLoad }) => {
               setIsLoading(false);
               setDuration(event.target.getDuration());
               setPlayer(event.target);
+              if (ref) {
+                ref.current = event.target;
+              }
               // Set initial volume
               event.target.setVolume(volume);
               // Add CSS to hide YouTube logo and right-click menu
@@ -165,13 +187,37 @@ const VideoPlayer = ({ videoId, onLoad }) => {
               if (iframe) {
                 iframe.style.pointerEvents = "none";
               }
-              if (onLoad) onLoad();
+              handleTimeUpdate(0);
             },
             onStateChange: (event) => {
-              setIsPlaying(event.data === YT.PlayerState.PLAYING);
-              if (event.data === YT.PlayerState.ENDED) {
-                setIsPlaying(false);
-                setProgress(100);
+              const playerState = event.data;
+              setIsPlaying(playerState === YT.PlayerState.PLAYING);
+
+              // Handle different player states
+              switch (playerState) {
+                case YT.PlayerState.ENDED:
+                  setIsPlaying(false);
+                  setProgress(100);
+                  handleTimeUpdate(duration);
+                  break;
+                case YT.PlayerState.PLAYING:
+                  // Start time updates
+                  if (progressInterval.current) {
+                    clearInterval(progressInterval.current);
+                  }
+                  progressInterval.current = setInterval(() => {
+                    const currentTime = event.target.getCurrentTime();
+                    handleTimeUpdate(currentTime);
+                  }, 500);
+                  break;
+                case YT.PlayerState.PAUSED:
+                  // Clear interval when paused
+                  if (progressInterval.current) {
+                    clearInterval(progressInterval.current);
+                  }
+                  // Update time one last time to ensure accuracy
+                  handleTimeUpdate(event.target.getCurrentTime());
+                  break;
               }
             },
             onError: (error) => {
@@ -189,11 +235,11 @@ const VideoPlayer = ({ videoId, onLoad }) => {
     initializePlayer();
 
     return () => {
-      if (player) {
-        player.destroy();
-      }
       if (progressInterval.current) {
         clearInterval(progressInterval.current);
+      }
+      if (player) {
+        player.destroy();
       }
       if (youtubeScript) {
         document.body.removeChild(youtubeScript);
@@ -201,24 +247,14 @@ const VideoPlayer = ({ videoId, onLoad }) => {
     };
   }, [videoId]);
 
-  // Update progress bar
+  // Clear interval when component unmounts or video changes
   useEffect(() => {
-    if (player && isPlaying) {
-      progressInterval.current = setInterval(() => {
-        const currentTime = player.getCurrentTime();
-        const duration = player.getDuration();
-        setProgress((currentTime / duration) * 100);
-      }, 1000);
-    } else if (progressInterval.current) {
-      clearInterval(progressInterval.current);
-    }
-
     return () => {
       if (progressInterval.current) {
         clearInterval(progressInterval.current);
       }
     };
-  }, [player, isPlaying]);
+  }, [videoId]);
 
   const handlePlay = () => {
     if (player) {
@@ -475,6 +511,8 @@ const VideoPlayer = ({ videoId, onLoad }) => {
       </div>
     </div>
   );
-};
+});
+
+VideoPlayer.displayName = 'VideoPlayer';
 
 export default VideoPlayer;

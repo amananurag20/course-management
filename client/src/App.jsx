@@ -19,7 +19,7 @@ import Practice from "./pages/Practice";
 import PracticeQuestions from "./components/PracticeQuestions";
 import CodingQuestion from "./components/CodingQuestion";
 import Courses from "./components/Courses";
-import CourseViewer from "./components/CourseViewer";
+import CourseViewer from "./components/CourseViewer/CourseViewer";
 import Reels from "./components/Reels";
 import Dashboard from "./components/Dashboard";
 import Layout from "./components/Layout";

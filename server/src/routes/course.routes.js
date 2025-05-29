@@ -4,6 +4,7 @@ const courseController = require("../controllers/course.controller");
 const { protect } = require("../middleware/auth");
 const validateRequest = require("../middleware/validate-request");
 const checkRole = require("../middleware/check-role");
+const noteController = require("../controllers/noteController");
 
 const router = express.Router();
 
@@ -34,7 +35,7 @@ router.post(
 );
 
 router.get("/", courseController.getCourses);
-router.get("/:id", courseController.getCourseById);
+router.get("/:id", protect,courseController.getCourseById);
 
 router.put(
   "/:id",
@@ -46,5 +47,28 @@ router.put(
 );
 
 router.post("/:id/enroll", protect, courseController.enrollInCourse);
+router.get(
+  "/:courseId/modules/:moduleIndex/resources/:resourceIndex/notes",
+  protect,
+  noteController.getResourceNotes
+);
+
+router.post(
+  "/:courseId/modules/:moduleIndex/resources/:resourceIndex/notes",
+  protect,
+  noteController.addNote
+);
+
+router.put(
+  "/:courseId/modules/:moduleIndex/resources/:resourceIndex/notes/:noteId",
+  protect,
+  noteController.updateNote
+);
+
+router.delete(
+  "/:courseId/modules/:moduleIndex/resources/:resourceIndex/notes/:noteId",
+  protect,
+  noteController.deleteNote
+);
 
 module.exports = router;

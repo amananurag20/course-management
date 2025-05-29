@@ -224,7 +224,7 @@ const McqQuestion = () => {
           alert(message);
           
           const redirectTimeout = setTimeout(() => {
-            navigate(`/course/${courseId}`);
+            navigate(`/courses/${courseId}`);
           }, 3000);
 
           return () => clearTimeout(redirectTimeout);
@@ -633,38 +633,55 @@ const McqQuestion = () => {
             </div>
           ) : (
             <div className="w-80">
-              <div className="bg-gray-800/50 backdrop-blur-sm rounded-2xl p-6 sticky top-24 border border-gray-700/50">
-                <h3 className="text-lg font-semibold mb-4">Questions Review</h3>
-                <div className="space-y-2">
-                  {questionData.questions.map((_, index) => {
-                    const answerData = selectedAnswers[index];
-                    const isAnswered = answerData?.selectedOption >= 0;
-                    
-                    return (
-                      <button
-                        key={index}
-                        onClick={() => {
-                          const element = document.getElementById(`question-${index}`);
-                          element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        }}
-                        className={`w-full p-3 rounded-lg flex items-center gap-3 transition-all hover:bg-gray-700/50 ${
-                          !isAnswered
-                            ? "border border-yellow-500/30"
-                            : answerData?.isCorrect
-                              ? "border border-green-500/30"
-                              : "border border-red-500/30"
-                        }`}
-                      >
+            <div className="bg-gray-800/50 backdrop-blur-sm rounded-2xl p-6 sticky top-24 border border-gray-700/50">
+              <h3 className="text-lg font-semibold mb-4">Questions Review</h3>
+              <div className="space-y-2">
+                {questionData.questions.map((_, index) => {
+                  const answerData = selectedAnswers[index];
+                  const isAnswered = answerData?.selectedOption >= 0;
+                  
+                  return (
+                    <button
+                      key={index}
+                      onClick={() => {
+                        const element = document.getElementById(`question-${index}`);
+                        element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                      }}
+                      className={`w-full p-3 rounded-lg flex items-center gap-3 transition-all hover:bg-gray-700/50 ${
+                        !isAnswered
+                          ? "border border-yellow-500/30"
+                          : answerData?.isCorrect
+                            ? "border border-green-500/30"
+                            : "border border-red-500/30"
+                      }`}
+                    >
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+                        !isAnswered
+                          ? "bg-yellow-500/20 text-yellow-300"
+                          : answerData?.isCorrect
+                            ? "bg-green-500/20 text-green-300"
+                            : "bg-red-500/20 text-red-300"
+                      }`}>
                         {index + 1}
-                      </button>
-                    );
-                  })}
-                </div>
+                      </div>
+                      <div className={`text-xs ${
+                        !isAnswered
+                          ? "text-yellow-300"
+                          : answerData?.isCorrect
+                            ? "text-green-300"
+                            : "text-red-300"
+                      }`}>
+                        {!isAnswered ? "Not Attempted" : (answerData?.isCorrect ? "Correct" : "Incorrect")}
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
+    </div>
 
       {/* Modals */}
       {showTimeUpModal && <TimeUpModal onSubmit={calculateAndShowResults} />}
