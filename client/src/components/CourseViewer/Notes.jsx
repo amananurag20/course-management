@@ -1,7 +1,19 @@
 // Updated Notes.js
 import React, { useState } from 'react';
-import { MdNoteAdd, MdTimer, MdClose, MdEdit, MdDelete, MdSave } from 'react-icons/md';
+import { 
+  MdNoteAdd, 
+  MdTimer, 
+  MdClose, 
+  MdEdit, 
+  MdDelete, 
+  MdSave,
+  MdSearch,
+  MdSort,
+  MdPictureAsPdf
+} from 'react-icons/md';
 import RichTextEditor from './RichTextEditor';
+import { jsPDF } from "jspdf";
+import autoTable from 'jspdf-autotable';
 
 const Notes = ({
   notes,
@@ -23,6 +35,10 @@ const Notes = ({
   const [textDirection, setTextDirection] = useState('ltr');
   const [textAlignment, setTextAlignment] = useState('left');
   const [activeFormats, setActiveFormats] = useState(new Set());
+
+  // New state for search and filter
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortOrder, setSortOrder] = useState("desc"); // "asc" or "desc"
 
   const isFormatActive = (command) => {
     try {
@@ -86,8 +102,111 @@ const Notes = ({
     requestAnimationFrame(updateActiveFormats);
   };
 
+  // New function to filter and sort notes
+  const getFilteredAndSortedNotes = () => {
+    let filtered = [...notes];
+
+    // Apply search filter
+    if (searchQuery) {
+      filtered = filtered.filter(note => 
+        note.content.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+
+    // Sort by creation date
+    filtered.sort((a, b) => {
+      const aDate = new Date(a.createdAt).getTime();
+      const bDate = new Date(b.createdAt).getTime();
+      return sortOrder === "asc" ? aDate - bDate : bDate - aDate;
+    });
+
+    return filtered;
+  };
+
+  // New function to handle PDF export
+  const handleExportNotes = () => {
+    const doc = new jsPDF();
+    const notesToExport = getFilteredAndSortedNotes();
+
+    // Add title
+    doc.setFontSize(20);
+    doc.setTextColor(37, 99, 235); // Blue color
+    doc.text('Course Notes', 20, 20);
+
+    // Prepare data for table
+    const tableData = notesToExport.map(note => {
+      const date = new Date(note.createdAt).toLocaleString();
+      const timestamp = note.timestamp ? formatTimestamp(note.timestamp) : '';
+      const content = note.content.replace(/<[^>]+>/g, ''); // Strip HTML
+
+      return [date, timestamp, content];
+    });
+
+    // Add table
+    autoTable(doc, {
+      startY: 30,
+      head: [['Date', 'Timestamp', 'Note Content']],
+      body: tableData,
+      theme: 'striped',
+      headStyles: {
+        fillColor: [37, 99, 235],
+        textColor: 255,
+        fontSize: 12,
+        fontStyle: 'bold'
+      },
+      styles: {
+        fontSize: 10,
+        cellPadding: 5,
+        overflow: 'linebreak',
+        cellWidth: 'wrap'
+      },
+      columnStyles: {
+        0: { cellWidth: 40 }, // Date
+        1: { cellWidth: 20 }, // Timestamp
+        2: { cellWidth: 'auto' } // Content
+      }
+    });
+
+    doc.save('course-notes.pdf');
+  };
+
   return (
     <div className="bg-gray-800/30 rounded-xl p-6 backdrop-blur-sm shadow-lg">
+      {/* Search and Filter Bar */}
+      <div className="flex items-center space-x-4 mb-4">
+        <div className="flex-1 relative">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search notes..."
+            className="w-full bg-gray-700/30 rounded-lg px-4 py-2 pl-10 text-gray-200 
+              placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+          />
+          <MdSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+        </div>
+
+        <button
+          onClick={() => setSortOrder(prev => prev === "asc" ? "desc" : "asc")}
+          className="p-2 rounded-lg bg-gray-700/30 hover:bg-gray-700/50 
+            text-gray-300 transition-colors flex items-center space-x-2"
+          title={sortOrder === "asc" ? "Oldest First" : "Newest First"}
+        >
+          <MdSort size={20} />
+          <span>{sortOrder === "asc" ? "Oldest" : "Newest"}</span>
+        </button>
+
+        <button
+          onClick={handleExportNotes}
+          className="p-2 rounded-lg bg-gray-700/30 hover:bg-gray-700/50 
+            text-gray-300 transition-colors flex items-center space-x-2"
+          title="Export notes as PDF"
+        >
+          <MdPictureAsPdf size={20} />
+          <span>PDF</span>
+        </button>
+      </div>
+
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold flex items-center">
           <MdNoteAdd className="mr-2" /> Notes
@@ -206,9 +325,9 @@ const Notes = ({
         </div>
       )}
 
-      {/* Notes List */}
+      {/* Notes List - Now using filtered and sorted notes */}
       <div className="space-y-4">
-        {notes.map((note) => (
+        {getFilteredAndSortedNotes().map((note) => (
           <div key={note._id} className="bg-gray-700/30 rounded-lg p-4 transition-all duration-200 hover:bg-gray-700/40">
             {editingNoteId === note._id ? (
               <div className="space-y-3">
