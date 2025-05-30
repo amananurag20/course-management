@@ -564,6 +564,8 @@ const CourseViewer = () => {
                     onDeleteNote={handleDeleteNote}
                     onSeekToTimestamp={handleSeekToTimestamp}
                     formatTimestamp={formatTimestamp}
+                    courseName={course.title}
+                    moduleName={currentModule.title}
                   />
 
                   {/* Navigation */}

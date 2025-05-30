@@ -9,7 +9,8 @@ import {
   MdSave,
   MdSearch,
   MdSort,
-  MdPictureAsPdf
+  MdPictureAsPdf,
+  MdFileDownload
 } from 'react-icons/md';
 import RichTextEditor from './RichTextEditor';
 import { jsPDF } from "jspdf";
@@ -23,6 +24,8 @@ const Notes = ({
   onDeleteNote,
   onSeekToTimestamp,
   formatTimestamp,
+  courseName,
+  moduleName,
 }) => {
   const [isAddingNote, setIsAddingNote] = useState(false);
   const [editingNoteId, setEditingNoteId] = useState(null);
@@ -123,28 +126,80 @@ const Notes = ({
     return filtered;
   };
 
-  // New function to handle PDF export
-  const handleExportNotes = () => {
-    const doc = new jsPDF();
-    const notesToExport = getFilteredAndSortedNotes();
-
-    // Add title
+  // Function to create PDF header with course and module info
+  const addPdfHeader = (doc, title = '') => {
     doc.setFontSize(20);
     doc.setTextColor(37, 99, 235); // Blue color
-    doc.text('Course Notes', 20, 20);
+    doc.text(courseName, 20, 20);
+    
+    doc.setFontSize(16);
+    doc.setTextColor(100, 100, 100); // Gray color
+    doc.text(moduleName, 20, 30);
+
+    if (title) {
+      doc.setFontSize(14);
+      doc.text(title, 20, 40);
+      return 45; // Return starting Y position for content
+    }
+    return 35;
+  };
+
+  // Function to handle single note PDF export
+  const handleExportSingleNote = (note) => {
+    const doc = new jsPDF();
+    const startY = addPdfHeader(doc, 'Note Details');
+
+    // Prepare note data
+    const date = new Date(note.createdAt).toLocaleString();
+    const timestamp = note.timestamp ? formatTimestamp(note.timestamp) : 'No timestamp';
+    const content = note.content.replace(/<[^>]+>/g, ''); // Strip HTML
+
+    // Add note content
+    autoTable(doc, {
+      startY,
+      head: [['Date', 'Timestamp', 'Note Content']],
+      body: [[date, timestamp, content]],
+      theme: 'striped',
+      headStyles: {
+        fillColor: [37, 99, 235],
+        textColor: 255,
+        fontSize: 12,
+        fontStyle: 'bold'
+      },
+      styles: {
+        fontSize: 10,
+        cellPadding: 5,
+        overflow: 'linebreak',
+        cellWidth: 'wrap'
+      },
+      columnStyles: {
+        0: { cellWidth: 40 }, // Date
+        1: { cellWidth: 20 }, // Timestamp
+        2: { cellWidth: 'auto' } // Content
+      }
+    });
+
+    const fileName = `note-${new Date(note.createdAt).toISOString().split('T')[0]}.pdf`;
+    doc.save(fileName);
+  };
+
+  // Updated bulk export function to include course and module info
+  const handleExportNotes = () => {
+    const doc = new jsPDF();
+    const startY = addPdfHeader(doc, 'All Notes');
+    const notesToExport = getFilteredAndSortedNotes();
 
     // Prepare data for table
     const tableData = notesToExport.map(note => {
       const date = new Date(note.createdAt).toLocaleString();
       const timestamp = note.timestamp ? formatTimestamp(note.timestamp) : '';
       const content = note.content.replace(/<[^>]+>/g, ''); // Strip HTML
-
       return [date, timestamp, content];
     });
 
     // Add table
     autoTable(doc, {
-      startY: 30,
+      startY,
       head: [['Date', 'Timestamp', 'Note Content']],
       body: tableData,
       theme: 'striped',
@@ -167,14 +222,15 @@ const Notes = ({
       }
     });
 
-    doc.save('course-notes.pdf');
+    const fileName = `${courseName.toLowerCase().replace(/\s+/g, '-')}-${moduleName.toLowerCase().replace(/\s+/g, '-')}-notes.pdf`;
+    doc.save(fileName);
   };
 
   return (
     <div className="bg-gray-800/30 rounded-xl p-6 backdrop-blur-sm shadow-lg">
       {/* Search and Filter Bar */}
       <div className="flex items-center space-x-4 mb-4">
-        <div className="flex-1 relative">
+        <div className="relative w-64">
           <input
             type="text"
             value={searchQuery}
@@ -200,10 +256,10 @@ const Notes = ({
           onClick={handleExportNotes}
           className="p-2 rounded-lg bg-gray-700/30 hover:bg-gray-700/50 
             text-gray-300 transition-colors flex items-center space-x-2"
-          title="Export notes as PDF"
+          title="Export all notes as PDF"
         >
           <MdPictureAsPdf size={20} />
-          <span>PDF</span>
+          <span>Export All</span>
         </button>
       </div>
 
@@ -325,7 +381,7 @@ const Notes = ({
         </div>
       )}
 
-      {/* Notes List - Now using filtered and sorted notes */}
+      {/* Notes List - Now with individual PDF download */}
       <div className="space-y-4">
         {getFilteredAndSortedNotes().map((note) => (
           <div key={note._id} className="bg-gray-700/30 rounded-lg p-4 transition-all duration-200 hover:bg-gray-700/40">
@@ -386,6 +442,13 @@ const Notes = ({
                     )}
                   </div>
                   <div className="flex space-x-2">
+                    <button
+                      onClick={() => handleExportSingleNote(note)}
+                      className="p-1.5 rounded hover:bg-gray-600/50 text-gray-400 hover:text-blue-400 transition-colors"
+                      title="Download note as PDF"
+                    >
+                      <MdFileDownload size={18} />
+                    </button>
                     <button
                       onClick={() => {
                         setEditingNoteId(note._id);
