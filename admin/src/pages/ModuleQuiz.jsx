@@ -103,15 +103,23 @@ const ModuleQuiz = () => {
   const [showForm, setShowForm] = useState(false);
 
   useEffect(() => {
-    dispatch(fetchCourseById(courseId));
-  }, [dispatch, courseId]);
+    if (!currentCourse || currentCourse._id !== courseId) {
+      dispatch(fetchCourseById(courseId));
+    }
+  }, [dispatch, courseId, currentCourse?._id]);
 
   useEffect(() => {
+    let isMounted = true;
     const load = async () => {
       const res = await dispatch(fetchModuleMCQs({ courseId, moduleId })).unwrap();
-      setQuestions(res.questions);
+      if (isMounted) {
+        setQuestions(res.questions);
+      }
     };
     load();
+    return () => {
+      isMounted = false;
+    };
   }, [dispatch, courseId, moduleId]);
 
   const handleAdd = async (data) => {
