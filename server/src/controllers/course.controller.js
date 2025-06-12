@@ -1,5 +1,6 @@
 const Course = require("../models/Course");
 const User = require("../models/User");
+const McqQuestion = require("../models/McqQuestion");
 
 // Create a new course
 const createCourse = async (req, res) => {
@@ -281,6 +282,79 @@ const deleteResource = async (req, res) => {
   }
 };
 
+// Module MCQ Management
+const getModuleMCQ = async (req, res) => {
+  try {
+    const { courseId, moduleId } = req.params;
+    const course = await Course.findById(courseId).populate("modules.mcqQuestion");
+    if (!course) {
+      return res.status(404).json({ message: "Course not found" });
+    }
+    const module = course.modules.id(moduleId);
+    if (!module) {
+      return res.status(404).json({ message: "Module not found" });
+    }
+    const question = module.mcqQuestion || null;
+    res.json({ questions: question ? [question] : [] });
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching module quiz", error: error.message });
+  }
+};
+
+const addModuleQuiz = async (req, res) => {
+  try {
+    const { courseId, moduleId } = req.params;
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({ message: "Course not found" });
+    }
+    const module = course.modules.id(moduleId);
+    if (!module) {
+      return res.status(404).json({ message: "Module not found" });
+    }
+
+    const quiz = await McqQuestion.create(req.body);
+    module.mcqQuestion = quiz._id;
+    await course.save();
+    res.status(201).json({ moduleId, quiz });
+  } catch (error) {
+    res.status(500).json({ message: "Error adding module quiz", error: error.message });
+  }
+};
+
+const updateModuleQuiz = async (req, res) => {
+  try {
+    const { quizId } = req.params;
+    const quiz = await McqQuestion.findByIdAndUpdate(quizId, req.body, { new: true, runValidators: true });
+    if (!quiz) {
+      return res.status(404).json({ message: "Quiz not found" });
+    }
+    res.json({ quiz });
+  } catch (error) {
+    res.status(500).json({ message: "Error updating module quiz", error: error.message });
+  }
+};
+
+const deleteModuleQuiz = async (req, res) => {
+  try {
+    const { courseId, moduleId, quizId } = req.params;
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({ message: "Course not found" });
+    }
+    const module = course.modules.id(moduleId);
+    if (!module) {
+      return res.status(404).json({ message: "Module not found" });
+    }
+    await McqQuestion.findByIdAndDelete(quizId);
+    module.mcqQuestion = undefined;
+    await course.save();
+    res.json({ moduleId, quizId });
+  } catch (error) {
+    res.status(500).json({ message: "Error deleting module quiz", error: error.message });
+  }
+};
+
 // Enrollment Management
 const getEnrollments = async (req, res) => {
   try {
@@ -439,5 +513,9 @@ module.exports = {
   unenrollStudent,
   getCourseProgress,
   getCourseAnalytics,
-  getModuleCompletion
+  getModuleCompletion,
+  getModuleMCQ,
+  addModuleQuiz,
+  updateModuleQuiz,
+  deleteModuleQuiz
 };
