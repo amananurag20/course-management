@@ -108,20 +108,25 @@ const ModuleQuiz = () => {
     }
   }, [dispatch, courseId, currentCourse?._id]);
 
-  const fetchedRef = React.useRef(false);
+  const fetchedRef = React.useRef('');
   useEffect(() => {
-    if (fetchedRef.current) return;
-    fetchedRef.current = true;
-    let isMounted = true;
+    if (fetchedRef.current === moduleId) return;
+    fetchedRef.current = moduleId;
+
+    const controller = new AbortController();
     const load = async () => {
-      const res = await dispatch(fetchModuleMCQs({ courseId, moduleId })).unwrap();
-      if (isMounted) {
+      try {
+        const res = await dispatch(
+          fetchModuleMCQs({ courseId, moduleId })
+        ).unwrap();
         setQuestions(res.questions);
+      } catch (err) {
+        console.error('Failed to load module quiz:', err);
       }
     };
     load();
     return () => {
-      isMounted = false;
+      controller.abort();
     };
   }, [dispatch, courseId, moduleId]);
 
