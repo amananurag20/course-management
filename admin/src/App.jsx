@@ -10,6 +10,7 @@ import Users from './pages/Users';
 import MCQQuestions from './pages/MCQQuestions';
 import Problems from './pages/Problems';
 import Assignments from './pages/Assignments';
+import ModuleQuiz from './pages/ModuleQuiz';
 
 const PrivateRoute = ({ children }) => {
   const { isAuthenticated, loading } = useSelector((state) => state.auth);
@@ -43,6 +44,7 @@ const App = () => {
                   <Route index element={<Navigate to="/courses" replace />} />
                   <Route path="courses" element={<Courses />} />
                   <Route path="courses/:id" element={<CourseDetails />} />
+                  <Route path="courses/:courseId/modules/:moduleId/quiz" element={<ModuleQuiz />} />
                   <Route path="users/*" element={<Users />} />
                   <Route path="mcq-questions/*" element={<MCQQuestions />} />
                   <Route path="problems/*" element={<Problems />} />
