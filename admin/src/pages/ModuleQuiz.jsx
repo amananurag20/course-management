@@ -108,7 +108,10 @@ const ModuleQuiz = () => {
     }
   }, [dispatch, courseId, currentCourse?._id]);
 
+  const fetchedRef = React.useRef(false);
   useEffect(() => {
+    if (fetchedRef.current) return;
+    fetchedRef.current = true;
     let isMounted = true;
     const load = async () => {
       const res = await dispatch(fetchModuleMCQs({ courseId, moduleId })).unwrap();
