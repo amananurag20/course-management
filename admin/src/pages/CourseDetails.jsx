@@ -413,6 +413,7 @@ const QuizManagement = ({ courseId, module }) => {
   const [loading, setLoading] = useState(true);
   const dispatch = useDispatch();
   const fetchedRef = React.useRef('');
+  const abortRef = React.useRef();
 
   useEffect(() => {
     if (!module?._id) {
@@ -422,7 +423,11 @@ const QuizManagement = ({ courseId, module }) => {
     if (fetchedRef.current === module._id) return;
     fetchedRef.current = module._id;
 
+    if (abortRef.current) {
+      abortRef.current.abort();
+    }
     const controller = new AbortController();
+    abortRef.current = controller;
     const fetchMCQQuestions = async () => {
       try {
         setLoading(true);

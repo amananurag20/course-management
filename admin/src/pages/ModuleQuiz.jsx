@@ -109,11 +109,17 @@ const ModuleQuiz = () => {
   }, [dispatch, courseId, currentCourse?._id]);
 
   const fetchedRef = React.useRef('');
+  const abortRef = React.useRef();
   useEffect(() => {
     if (fetchedRef.current === moduleId) return;
     fetchedRef.current = moduleId;
 
+    if (abortRef.current) {
+      abortRef.current.abort();
+    }
     const controller = new AbortController();
+    abortRef.current = controller;
+
     const load = async () => {
       try {
         const res = await dispatch(
@@ -121,7 +127,9 @@ const ModuleQuiz = () => {
         ).unwrap();
         setQuestions(res.questions);
       } catch (err) {
-        console.error('Failed to load module quiz:', err);
+        if (err.name !== 'AbortError') {
+          console.error('Failed to load module quiz:', err);
+        }
       }
     };
     load();
