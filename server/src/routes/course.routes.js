@@ -6,6 +6,7 @@ const validateRequest = require("../middleware/validate-request");
 const checkRole = require("../middleware/check-role");
 const noteController = require("../controllers/noteController");
 
+
 const router = express.Router();
 
 // Validation middleware
@@ -150,6 +151,32 @@ router.delete(
   "/:courseId/modules/:moduleIndex/resources/:resourceIndex/notes/:noteId",
   protect,
   noteController.deleteNote
+);
+
+// Module MCQ Routes
+router.get(
+  "/:courseId/modules/:moduleId/mcq",
+  protect,
+  checkRole(["instructor", "admin"]),
+  courseController.getModuleMCQ
+);
+router.post(
+  "/:courseId/modules/:moduleId/mcq",
+  protect,
+  checkRole(["instructor", "admin"]),
+  courseController.addModuleQuiz
+);
+router.put(
+  "/:courseId/modules/:moduleId/mcq/:quizId",
+  protect,
+  checkRole(["instructor", "admin"]),
+  courseController.updateModuleQuiz
+);
+router.delete(
+  "/:courseId/modules/:moduleId/mcq/:quizId",
+  protect,
+  checkRole(["instructor", "admin"]),
+  courseController.deleteModuleQuiz
 );
 
 module.exports = router;
