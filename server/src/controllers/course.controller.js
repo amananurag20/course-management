@@ -1,5 +1,6 @@
 const Course = require("../models/Course");
 const User = require("../models/User");
+const McqQuestion = require("../models/McqQuestion");
 
 // Create a new course
 const createCourse = async (req, res) => {
@@ -422,6 +423,165 @@ const getModuleCompletion = async (req, res) => {
   }
 };
 
+// ----- MCQ Quiz Management for Modules -----
+const getModuleMCQs = async (req, res) => {
+  try {
+    const { courseId, moduleId } = req.params;
+    const course = await Course.findById(courseId).populate({
+      path: 'modules.mcqQuestion',
+      model: 'McqQuestion'
+    });
+
+    if (!course) {
+      return res.status(404).json({ message: 'Course not found' });
+    }
+
+    const module = course.modules.id(moduleId);
+    if (!module) {
+      return res.status(404).json({ message: 'Module not found' });
+    }
+
+    if (!module.mcqQuestion) {
+      return res.json({ questions: [] });
+    }
+
+    const mcq = module.mcqQuestion.questions ? module.mcqQuestion : await McqQuestion.findById(module.mcqQuestion);
+    if (!mcq) {
+      return res.json({ questions: [] });
+    }
+
+    const questions = mcq.questions.map((q) => ({
+      _id: q._id,
+      question: q.question,
+      options: q.options.map((o) => o.text),
+      correctOption: q.options.findIndex((o) => o.isCorrect),
+      explanation: q.explanation
+    }));
+
+    res.json({ questions, quizId: mcq._id });
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching MCQ questions', error: error.message });
+  }
+};
+
+const addModuleQuiz = async (req, res) => {
+  try {
+    const { courseId, moduleId } = req.params;
+    const { question, options, correctOption, explanation } = req.body;
+
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({ message: 'Course not found' });
+    }
+
+    const module = course.modules.id(moduleId);
+    if (!module) {
+      return res.status(404).json({ message: 'Module not found' });
+    }
+
+    let mcq;
+    if (module.mcqQuestion) {
+      mcq = await McqQuestion.findById(module.mcqQuestion);
+    } else {
+      mcq = await McqQuestion.create({
+        title: `Quiz for ${module.title}`,
+        description: `Quiz for module ${module.title}`,
+        topic: module.title,
+        questions: []
+      });
+      module.mcqQuestion = mcq._id;
+      await course.save();
+    }
+
+    mcq.questions.push({
+      question,
+      options: options.map((text, idx) => ({ text, isCorrect: idx === correctOption })),
+      explanation,
+      points: 1
+    });
+
+    mcq.totalPoints = mcq.questions.length;
+    await mcq.save();
+
+    res.status(201).json({ moduleId, quiz: mcq });
+  } catch (error) {
+    res.status(500).json({ message: 'Error adding quiz question', error: error.message });
+  }
+};
+
+const updateModuleQuiz = async (req, res) => {
+  try {
+    const { courseId, moduleId, quizId } = req.params;
+    const { question, options, correctOption, explanation } = req.body;
+
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({ message: 'Course not found' });
+    }
+
+    const module = course.modules.id(moduleId);
+    if (!module || !module.mcqQuestion) {
+      return res.status(404).json({ message: 'Module or quiz not found' });
+    }
+
+    const mcq = await McqQuestion.findById(module.mcqQuestion);
+    if (!mcq) {
+      return res.status(404).json({ message: 'Quiz not found' });
+    }
+
+    const qIndex = mcq.questions.findIndex((q) => q._id.toString() === quizId);
+    if (qIndex === -1) {
+      return res.status(404).json({ message: 'Question not found' });
+    }
+
+    mcq.questions[qIndex].question = question;
+    mcq.questions[qIndex].options = options.map((text, idx) => ({ text, isCorrect: idx === correctOption }));
+    mcq.questions[qIndex].explanation = explanation;
+    mcq.markModified('questions');
+
+    await mcq.save();
+    res.json({ moduleId, quiz: mcq.questions[qIndex] });
+  } catch (error) {
+    res.status(500).json({ message: 'Error updating quiz question', error: error.message });
+  }
+};
+
+const deleteModuleQuiz = async (req, res) => {
+  try {
+    const { courseId, moduleId, quizId } = req.params;
+
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({ message: 'Course not found' });
+    }
+
+    const module = course.modules.id(moduleId);
+    if (!module || !module.mcqQuestion) {
+      return res.status(404).json({ message: 'Module or quiz not found' });
+    }
+
+    const mcq = await McqQuestion.findById(module.mcqQuestion);
+    if (!mcq) {
+      return res.status(404).json({ message: 'Quiz not found' });
+    }
+
+    mcq.questions = mcq.questions.filter((q) => q._id.toString() !== quizId);
+    await mcq.save();
+
+    // If no questions left, remove reference
+    if (mcq.questions.length === 0) {
+      module.mcqQuestion = undefined;
+      await Promise.all([course.save(), mcq.deleteOne()]);
+    } else {
+      await course.save();
+    }
+
+    res.json({ moduleId, quizId });
+  } catch (error) {
+    res.status(500).json({ message: 'Error deleting quiz question', error: error.message });
+  }
+};
+
 module.exports = {
   createCourse,
   getCourses,
@@ -439,5 +599,9 @@ module.exports = {
   unenrollStudent,
   getCourseProgress,
   getCourseAnalytics,
-  getModuleCompletion
+  getModuleCompletion,
+  getModuleMCQs,
+  addModuleQuiz,
+  updateModuleQuiz,
+  deleteModuleQuiz
 };

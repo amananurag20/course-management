@@ -412,16 +412,28 @@ const QuizManagement = ({ courseId, module }) => {
   const [mcqQuestions, setMcqQuestions] = useState([]);
   const [loading, setLoading] = useState(true);
   const dispatch = useDispatch();
+  const fetchedRef = React.useRef('');
+  const abortRef = React.useRef();
 
   useEffect(() => {
+    if (!module?._id) {
+      setLoading(false);
+      return;
+    }
+    if (fetchedRef.current === module._id) return;
+    fetchedRef.current = module._id;
+
+    if (abortRef.current) {
+      abortRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortRef.current = controller;
     const fetchMCQQuestions = async () => {
       try {
         setLoading(true);
-        // Implement API call to fetch MCQ questions
-        const response = await dispatch(fetchModuleMCQs({
-          courseId,
-          moduleId: module?._id
-        })).unwrap();
+        const response = await dispatch(
+          fetchModuleMCQs({ courseId, moduleId: module._id })
+        ).unwrap();
         setMcqQuestions(response.questions);
       } catch (err) {
         console.error('Failed to fetch MCQ questions:', err);
@@ -430,11 +442,8 @@ const QuizManagement = ({ courseId, module }) => {
       }
     };
 
-    if (module?._id) {
-      fetchMCQQuestions();
-    } else {
-      setLoading(false);
-    }
+    fetchMCQQuestions();
+    return () => controller.abort();
   }, [dispatch, courseId, module?._id]);
 
   const handleAddQuiz = async (quizData) => {
