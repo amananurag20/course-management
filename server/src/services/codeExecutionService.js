@@ -408,6 +408,122 @@ async function executeCode({ code, language, problem, testCases }) {
   }
 }
 
+async function runCustomCode({ code, language, problem, input }) {
+  let container;
+  let workDir;
+
+  try {
+    const { container: newContainer, workDir: newWorkDir, config } =
+      await createContainer(language, code, problem);
+    container = newContainer;
+    workDir = newWorkDir;
+
+    await container.start();
+
+    let execCommand;
+    if (language.toLowerCase() === "java") {
+      const compileResult = await execWithTimeout(
+        container,
+        ["bash", "-c", "cd /app && javac Main.java"],
+        10000
+      );
+
+      if (compileResult.exitCode !== 0) {
+        return {
+          error: `Compilation failed: ${compileResult.stderr}`,
+          status: "compilation_error",
+        };
+      }
+
+      execCommand = ["bash", "-c", "cd /app && java Main"];
+    } else if (language.toLowerCase() === "cpp") {
+      const compileResult = await execWithTimeout(
+        container,
+        [
+          "bash",
+          "-c",
+          "cd /app && g++ -std=c++17 -O2 solution.cpp -o solution",
+        ],
+        10000
+      );
+
+      if (compileResult.exitCode !== 0) {
+        return {
+          error: `Compilation failed: ${compileResult.stderr}`,
+          status: "compilation_error",
+        };
+      }
+
+      execCommand = ["bash", "-c", "cd /app && ./solution"];
+    } else {
+      execCommand = config.command;
+    }
+
+    const startTime = Date.now();
+    const inputStr = input || "";
+
+    await fs.writeFile(path.join(workDir, "input.txt"), inputStr);
+
+    const execResult = await execWithTimeout(
+      container,
+      [...execCommand.slice(0, -1), `${execCommand[execCommand.length - 1]} '${inputStr}'`],
+      config.timeout
+    );
+
+    const executionTime = Date.now() - startTime;
+
+    if (execResult.exitCode !== 0) {
+      return {
+        error: execResult.stderr || "Runtime error",
+        exitCode: execResult.exitCode,
+        time: executionTime,
+        status: "runtime_error",
+      };
+    }
+
+    let output = execResult.stdout.trim();
+    try {
+      if (
+        output.startsWith("{") ||
+        output.startsWith("[") ||
+        output.match(/^["0-9]/) ||
+        output === "true" ||
+        output === "false" ||
+        output === "null"
+      ) {
+        output = JSON.parse(output);
+      }
+    } catch (e) {
+      // keep raw output
+    }
+
+    return {
+      output,
+      time: executionTime,
+      memory: 0,
+      status: "success",
+    };
+  } catch (error) {
+    console.error("Custom code execution error:", error);
+    return {
+      error: error.message,
+      status: "execution_error",
+    };
+  } finally {
+    if (container) {
+      await cleanupContainer(container);
+    }
+    if (workDir) {
+      try {
+        await fs.rm(workDir, { recursive: true, force: true });
+      } catch (error) {
+        console.error("Directory cleanup error:", error);
+      }
+    }
+  }
+}
+
 module.exports = {
   executeCode,
+  runCustomCode,
 };
