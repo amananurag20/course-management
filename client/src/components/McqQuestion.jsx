@@ -69,6 +69,8 @@ const McqQuestion = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [startTime, setStartTime] = useState(null);
   const [moduleStatus, setModuleStatus] = useState(null);
+  const [isCourseContext, setIsCourseContext] = useState(false);
+  const [courseId, setCourseId] = useState(null);
 
   // Fetch question data and set start time
   useEffect(() => {
@@ -77,7 +79,14 @@ const McqQuestion = () => {
         setLoading(true);
         const response = await mcqService.getMcqQuestionById(id);
         setQuestionData(response.data.mcqQuestion);
-        setStartTime(Date.now()); // Set start time when questions are loaded
+        setStartTime(Date.now());
+
+        // Check if we're in a course context
+        const courseIdFromUrl = new URLSearchParams(window.location.search).get('courseId');
+        if (courseIdFromUrl) {
+          setIsCourseContext(true);
+          setCourseId(courseIdFromUrl);
+        }
       } catch (err) {
         console.error("Error fetching question:", err);
         setError(err.message || "Failed to fetch question");
@@ -457,6 +466,15 @@ const McqQuestion = () => {
     );
   };
 
+  // Update back navigation
+  const handleBackNavigation = () => {
+    if (isCourseContext && courseId) {
+      navigate(`/courses/${courseId}`);
+    } else {
+      navigate("/practice");
+    }
+  };
+
   return (
     <div
       className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white"
@@ -467,11 +485,11 @@ const McqQuestion = () => {
         <div className="max-w-7xl mx-auto px-8 py-4">
           <div className="flex justify-between items-center">
             <button
-              onClick={() => navigate("/practice")}
+              onClick={handleBackNavigation}
               className="flex items-center text-purple-400 hover:text-purple-300 transition-colors group"
             >
               <MdArrowBack size={20} className="mr-2 group-hover:-translate-x-1 transition-transform" />
-              Back to Practice
+              {isCourseContext ? "Back to Course" : "Back to Practice"}
             </button>
             <div className="flex items-center gap-6">
               {!showResults && (

@@ -134,8 +134,8 @@ const updateCourse = async (req, res) => {
       return res.status(404).json({ message: "Course not found" });
     }
 
-    // Check if user is instructor
-    if (course.instructor.toString() !== req.user.userId) {
+    // Check if user is instructor or admin
+    if (course.instructor.toString() !== req.user.userId && req.user.role !== 'admin') {
       return res
         .status(403)
         .json({ message: "Not authorized to update this course" });
@@ -166,49 +166,259 @@ const updateCourse = async (req, res) => {
   }
 };
 
-// Enroll in course
-const enrollInCourse = async (req, res) => {
+// Delete course
+const deleteCourse = async (req, res) => {
   try {
-    const courseId = req.params.id;
-    const userId = req.user.userId;
-
-    // First check if user is already enrolled
-    const user = await User.findById(userId);
-    if (user.enrolledCourses.includes(courseId)) {
-      return res
-        .status(400)
-        .json({ message: "Already enrolled in this course" });
+    const course = await Course.findById(req.params.id);
+    if (!course) {
+      return res.status(404).json({ message: "Course not found" });
     }
 
-    // Add user to course students using $addToSet to prevent duplicates
-    await Course.findByIdAndUpdate(
-      courseId,
-      { $addToSet: { students: userId } },
-      { new: true }
-    );
-
-    // Add course to user's enrolled courses using $addToSet
-    await User.findByIdAndUpdate(
-      userId,
-      { $addToSet: { enrolledCourses: courseId } },
-      { new: true }
-    );
-
-    // Get updated course details
-    const updatedCourse = await Course.findById(courseId)
-      .populate("instructor", "name email")
-      .populate("students", "name email");
-
-    res.json({
-      message: "Successfully enrolled in course",
-      course: updatedCourse,
-    });
+    await Course.findByIdAndDelete(req.params.id);
+    res.json({ message: "Course deleted successfully" });
   } catch (error) {
-    console.error("Enrollment error:", error);
-    res.status(500).json({
-      message: "Error enrolling in course",
-      error: error.message,
-    });
+    res.status(500).json({ message: "Error deleting course", error: error.message });
+  }
+};
+
+// Module Management
+const addModule = async (req, res) => {
+  try {
+    const course = await Course.findById(req.params.courseId);
+    if (!course) {
+      return res.status(404).json({ message: "Course not found" });
+    }
+
+    course.modules.push(req.body);
+    await course.save();
+    res.status(201).json(course);
+  } catch (error) {
+    res.status(500).json({ message: "Error adding module", error: error.message });
+  }
+};
+
+const updateModule = async (req, res) => {
+  try {
+    const { courseId, moduleIndex } = req.params;
+    const course = await Course.findById(courseId);
+    if (!course || !course.modules[moduleIndex]) {
+      return res.status(404).json({ message: "Course or module not found" });
+    }
+
+    course.modules[moduleIndex] = { ...course.modules[moduleIndex].toObject(), ...req.body };
+    await course.save();
+    res.json(course);
+  } catch (error) {
+    res.status(500).json({ message: "Error updating module", error: error.message });
+  }
+};
+
+const deleteModule = async (req, res) => {
+  try {
+    const { courseId, moduleIndex } = req.params;
+    const course = await Course.findById(courseId);
+    if (!course || !course.modules[moduleIndex]) {
+      return res.status(404).json({ message: "Course or module not found" });
+    }
+
+    course.modules.splice(moduleIndex, 1);
+    await course.save();
+    res.json({ message: "Module deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ message: "Error deleting module", error: error.message });
+  }
+};
+
+// Resource Management
+const addResource = async (req, res) => {
+  try {
+    const { courseId, moduleIndex } = req.params;
+    const course = await Course.findById(courseId);
+    if (!course || !course.modules[moduleIndex]) {
+      return res.status(404).json({ message: "Course or module not found" });
+    }
+
+    course.modules[moduleIndex].resources.push(req.body);
+    await course.save();
+    res.status(201).json(course);
+  } catch (error) {
+    res.status(500).json({ message: "Error adding resource", error: error.message });
+  }
+};
+
+const updateResource = async (req, res) => {
+  try {
+    const { courseId, moduleIndex, resourceIndex } = req.params;
+    const course = await Course.findById(courseId);
+    if (!course || !course.modules[moduleIndex] || !course.modules[moduleIndex].resources[resourceIndex]) {
+      return res.status(404).json({ message: "Course, module, or resource not found" });
+    }
+
+    course.modules[moduleIndex].resources[resourceIndex] = {
+      ...course.modules[moduleIndex].resources[resourceIndex].toObject(),
+      ...req.body
+    };
+    await course.save();
+    res.json(course);
+  } catch (error) {
+    res.status(500).json({ message: "Error updating resource", error: error.message });
+  }
+};
+
+const deleteResource = async (req, res) => {
+  try {
+    const { courseId, moduleIndex, resourceIndex } = req.params;
+    const course = await Course.findById(courseId);
+    if (!course || !course.modules[moduleIndex] || !course.modules[moduleIndex].resources[resourceIndex]) {
+      return res.status(404).json({ message: "Course, module, or resource not found" });
+    }
+
+    course.modules[moduleIndex].resources.splice(resourceIndex, 1);
+    await course.save();
+    res.json({ message: "Resource deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ message: "Error deleting resource", error: error.message });
+  }
+};
+
+// Enrollment Management
+const getEnrollments = async (req, res) => {
+  try {
+    const course = await Course.findById(req.params.courseId)
+      .populate("students", "name email")
+      .select("students");
+    if (!course) {
+      return res.status(404).json({ message: "Course not found" });
+    }
+    res.json(course.students);
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching enrollments", error: error.message });
+  }
+};
+
+const enrollStudent = async (req, res) => {
+  try {
+    const { courseId, studentId } = req.params;
+    const [course, student] = await Promise.all([
+      Course.findById(courseId),
+      User.findById(studentId)
+    ]);
+
+    if (!course || !student) {
+      return res.status(404).json({ message: "Course or student not found" });
+    }
+
+    if (course.students.includes(studentId)) {
+      return res.status(400).json({ message: "Student already enrolled" });
+    }
+
+    course.students.push(studentId);
+    student.enrolledCourses.push(courseId);
+    await Promise.all([course.save(), student.save()]);
+
+    res.json({ message: "Student enrolled successfully" });
+  } catch (error) {
+    res.status(500).json({ message: "Error enrolling student", error: error.message });
+  }
+};
+
+const unenrollStudent = async (req, res) => {
+  try {
+    const { courseId, studentId } = req.params;
+    const [course, student] = await Promise.all([
+      Course.findById(courseId),
+      User.findById(studentId)
+    ]);
+
+    if (!course || !student) {
+      return res.status(404).json({ message: "Course or student not found" });
+    }
+
+    course.students = course.students.filter(id => id.toString() !== studentId);
+    student.enrolledCourses = student.enrolledCourses.filter(id => id.toString() !== courseId);
+    await Promise.all([course.save(), student.save()]);
+
+    res.json({ message: "Student unenrolled successfully" });
+  } catch (error) {
+    res.status(500).json({ message: "Error unenrolling student", error: error.message });
+  }
+};
+
+// Course Progress & Analytics
+const getCourseProgress = async (req, res) => {
+  try {
+    const course = await Course.findById(req.params.courseId)
+      .populate("students", "name email")
+      .populate("modules.completedBy.user", "name email");
+    
+    if (!course) {
+      return res.status(404).json({ message: "Course not found" });
+    }
+
+    const progress = course.modules.map(module => ({
+      moduleId: module._id,
+      title: module.title,
+      totalStudents: course.students.length,
+      completedCount: module.completedBy.length,
+      completionRate: (module.completedBy.length / course.students.length) * 100,
+      completedBy: module.completedBy
+    }));
+
+    res.json(progress);
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching course progress", error: error.message });
+  }
+};
+
+const getCourseAnalytics = async (req, res) => {
+  try {
+    const course = await Course.findById(req.params.courseId)
+      .populate("students", "name email")
+      .populate("modules.completedBy.user", "name email");
+    
+    if (!course) {
+      return res.status(404).json({ message: "Course not found" });
+    }
+
+    const analytics = {
+      totalStudents: course.students.length,
+      moduleCompletion: course.modules.map(module => ({
+        moduleId: module._id,
+        title: module.title,
+        completionRate: (module.completedBy.length / course.students.length) * 100,
+      })),
+      overallProgress: course.modules.reduce((acc, module) => 
+        acc + (module.completedBy.length / course.students.length), 0) / course.modules.length * 100
+    };
+
+    res.json(analytics);
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching course analytics", error: error.message });
+  }
+};
+
+const getModuleCompletion = async (req, res) => {
+  try {
+    const { courseId, moduleIndex } = req.params;
+    const course = await Course.findById(courseId);
+    
+    if (!course || !course.modules[moduleIndex]) {
+      return res.status(404).json({ message: "Course or module not found" });
+    }
+
+    const module = course.modules[moduleIndex];
+    const completion = {
+      moduleId: module._id,
+      title: module.title,
+      totalStudents: course.students.length,
+      completedCount: module.completedBy.length,
+      completionRate: (module.completedBy.length / course.students.length) * 100,
+      completedBy: module.completedBy
+    };
+
+    res.json(completion);
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching module completion", error: error.message });
   }
 };
 
@@ -217,5 +427,17 @@ module.exports = {
   getCourses,
   getCourseById,
   updateCourse,
-  enrollInCourse,
+  deleteCourse,
+  addModule,
+  updateModule,
+  deleteModule,
+  addResource,
+  updateResource,
+  deleteResource,
+  getEnrollments,
+  enrollStudent,
+  unenrollStudent,
+  getCourseProgress,
+  getCourseAnalytics,
+  getModuleCompletion
 };

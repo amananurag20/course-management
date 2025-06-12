@@ -33,6 +33,8 @@ import {
   MdFormatAlignLeft,
   MdFormatAlignCenter,
   MdFormatAlignRight,
+  MdWarning,
+  MdInfo,
 } from "react-icons/md";
 
 const CourseViewer = () => {
@@ -62,6 +64,8 @@ const CourseViewer = () => {
   const editorRef = useRef(null);
   const [activeFormats, setActiveFormats] = useState(new Set());
   const [textDirection, setTextDirection] = useState('ltr');
+  const [showQuizModal, setShowQuizModal] = useState(false);
+  const [selectedMcqId, setSelectedMcqId] = useState(null);
 
   // Calculate current module and resource
   const currentModule = course?.modules?.[currentModuleIndex];
@@ -164,8 +168,14 @@ const CourseViewer = () => {
 
   const handleMcqClick = (mcqId) => {
     if (mcqId) {
-      navigate(`/practice/mcq/${mcqId}?courseId=${courseId}&moduleIndex=${currentModuleIndex}`);
+      setSelectedMcqId(mcqId);
+      setShowQuizModal(true);
     }
+  };
+
+  const startQuiz = () => {
+    setShowQuizModal(false);
+    navigate(`/practice/mcq/${selectedMcqId}?courseId=${courseId}&moduleIndex=${currentModuleIndex}`);
   };
 
   const isModuleLocked = (moduleIndex) => {
@@ -225,7 +235,8 @@ const CourseViewer = () => {
 
   // Function to fetch notes for current resource
   const fetchNotes = async () => {
-    if (!course || !currentResource || !user?._id) return;
+    
+    if (!course || !currentResource || !user?.id) return;
     try {
       const response = await courseService.getResourceNotes(courseId, currentModuleIndex, currentResourceIndex);
       setNotes(response.notes);
@@ -236,7 +247,8 @@ const CourseViewer = () => {
 
   // Add useEffect to fetch notes when resource changes
   useEffect(() => {
-    if (course && currentResource && user?._id) {
+    // console.log({course, currentResource, user})
+    if (course && currentResource && user?.id) {
       fetchNotes();
     } else {
       setNotes([]); // Reset notes when no resource is selected
@@ -500,6 +512,90 @@ const CourseViewer = () => {
         marginLeft: isGlobalSidebarOpen ? "256px" : "80px",
         width: `calc(100% - ${isGlobalSidebarOpen ? "256px" : "80px"})`,
       }}>
+      {/* Quiz Confirmation Modal */}
+      {showQuizModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="bg-gray-800 rounded-xl p-6 max-w-lg w-full mx-4 shadow-2xl">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center">
+                <div className="bg-purple-500/20 p-2 rounded-lg">
+                  <MdQuiz className="text-purple-400" size={24} />
+                </div>
+                <h2 className="text-xl font-bold ml-3">Start Module Quiz</h2>
+              </div>
+              <button
+                onClick={() => setShowQuizModal(false)}
+                className="p-2 hover:bg-gray-700/50 rounded-lg transition-colors"
+              >
+                <MdClose size={20} />
+              </button>
+            </div>
+
+            <div className="space-y-4 mb-6">
+              <div className="flex items-start space-x-3 bg-blue-500/10 p-4 rounded-lg">
+                <MdInfo className="text-blue-400 flex-shrink-0 mt-1" size={20} />
+                <div>
+                  <h3 className="font-medium text-blue-400">Quiz Information</h3>
+                  <p className="text-gray-300 text-sm mt-1">
+                    This quiz will test your understanding of {currentModule.title}. Make sure you've reviewed all the content before starting.
+                  </p>
+                  <p className="text-gray-300 text-sm mt-2">
+                    After completing the quiz, you'll automatically return to this course page.
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between py-2 border-b border-gray-700">
+                  <span className="text-gray-400">Module</span>
+                  <span className="font-medium">{currentModule.title}</span>
+                </div>
+                <div className="flex items-center justify-between py-2 border-b border-gray-700">
+                  <span className="text-gray-400">Resources Covered</span>
+                  <span className="font-medium">{currentModule.resources?.length || 0} items</span>
+                </div>
+                <div className="flex items-center justify-between py-2 border-b border-gray-700">
+                  <span className="text-gray-400">Required to Progress</span>
+                  <span className="text-green-400 font-medium">Yes</span>
+                </div>
+                <div className="flex items-center justify-between py-2 border-b border-gray-700">
+                  <span className="text-gray-400">Return to Course</span>
+                  <span className="text-blue-400 font-medium">Automatic</span>
+                </div>
+              </div>
+
+              <div className="flex items-start space-x-3 bg-yellow-500/10 p-4 rounded-lg">
+                <MdWarning className="text-yellow-400 flex-shrink-0 mt-1" size={20} />
+                <div>
+                  <h3 className="font-medium text-yellow-400">Important Note</h3>
+                  <p className="text-gray-300 text-sm mt-1">
+                    You must pass this quiz to unlock the next module. Take your time and answer carefully.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex space-x-3">
+              <button
+                onClick={() => setShowQuizModal(false)}
+                className="flex-1 px-4 py-2 bg-gray-700/50 hover:bg-gray-700/70 
+                  rounded-lg transition-colors text-gray-300"
+              >
+                Review Module First
+              </button>
+              <button
+                onClick={startQuiz}
+                className="flex-1 px-4 py-2 bg-purple-500/20 hover:bg-purple-500/30 
+                  text-purple-400 rounded-lg transition-colors flex items-center justify-center"
+              >
+                <MdQuiz className="mr-2" size={20} />
+                Start Quiz
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 h-screen">
         {/* Main Content Area */}
         <div className="lg:col-span-2 bg-gray-900 flex flex-col h-screen">

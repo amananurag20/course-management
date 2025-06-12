@@ -24,7 +24,9 @@ const courseValidation = [
     }),
 ];
 
-// Routes
+// Course Management Routes
+router.get("/", courseController.getCourses);
+router.get("/:id", protect, courseController.getCourseById);
 router.post(
   "/",
   protect,
@@ -33,10 +35,6 @@ router.post(
   validateRequest,
   courseController.createCourse
 );
-
-router.get("/", courseController.getCourses);
-router.get("/:id", protect,courseController.getCourseById);
-
 router.put(
   "/:id",
   protect,
@@ -45,26 +43,109 @@ router.put(
   validateRequest,
   courseController.updateCourse
 );
+router.delete(
+  "/:id",
+  protect,
+  checkRole(["instructor", "admin"]),
+  courseController.deleteCourse
+);
 
-router.post("/:id/enroll", protect, courseController.enrollInCourse);
+// Module Management Routes
+router.post(
+  "/:courseId/modules",
+  protect,
+  checkRole(["instructor", "admin"]),
+  courseController.addModule
+);
+router.put(
+  "/:courseId/modules/:moduleIndex",
+  protect,
+  checkRole(["instructor", "admin"]),
+  courseController.updateModule
+);
+router.delete(
+  "/:courseId/modules/:moduleIndex",
+  protect,
+  checkRole(["instructor", "admin"]),
+  courseController.deleteModule
+);
+
+// Resource Management Routes
+router.post(
+  "/:courseId/modules/:moduleIndex/resources",
+  protect,
+  checkRole(["instructor", "admin"]),
+  courseController.addResource
+);
+router.put(
+  "/:courseId/modules/:moduleIndex/resources/:resourceIndex",
+  protect,
+  checkRole(["instructor", "admin"]),
+  courseController.updateResource
+);
+router.delete(
+  "/:courseId/modules/:moduleIndex/resources/:resourceIndex",
+  protect,
+  checkRole(["instructor", "admin"]),
+  courseController.deleteResource
+);
+
+// Enrollment Management Routes
+router.get(
+  "/:courseId/enrollments",
+  protect,
+  checkRole(["instructor", "admin"]),
+  courseController.getEnrollments
+);
+router.post(
+  "/:courseId/enroll/:studentId",
+  protect,
+  checkRole(["instructor", "admin"]),
+  courseController.enrollStudent
+);
+router.delete(
+  "/:courseId/enroll/:studentId",
+  protect,
+  checkRole(["instructor", "admin"]),
+  courseController.unenrollStudent
+);
+
+// Course Progress & Analytics Routes
+router.get(
+  "/:courseId/progress",
+  protect,
+  checkRole(["instructor", "admin"]),
+  courseController.getCourseProgress
+);
+router.get(
+  "/:courseId/analytics",
+  protect,
+  checkRole(["instructor", "admin"]),
+  courseController.getCourseAnalytics
+);
+router.get(
+  "/:courseId/modules/:moduleIndex/completion",
+  protect,
+  checkRole(["instructor", "admin"]),
+  courseController.getModuleCompletion
+);
+
+// Note Management Routes (existing)
 router.get(
   "/:courseId/modules/:moduleIndex/resources/:resourceIndex/notes",
   protect,
   noteController.getResourceNotes
 );
-
 router.post(
   "/:courseId/modules/:moduleIndex/resources/:resourceIndex/notes",
   protect,
   noteController.addNote
 );
-
 router.put(
   "/:courseId/modules/:moduleIndex/resources/:resourceIndex/notes/:noteId",
   protect,
   noteController.updateNote
 );
-
 router.delete(
   "/:courseId/modules/:moduleIndex/resources/:resourceIndex/notes/:noteId",
   protect,

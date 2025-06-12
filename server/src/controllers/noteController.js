@@ -32,6 +32,7 @@ const sanitizeContent = (content) => {
 exports.getResourceNotes = async (req, res) => {
   try {
     const { courseId, moduleIndex, resourceIndex } = req.params;
+    const userId = req.user._id;
     
     const course = await Course.findById(courseId);
     if (!course) {
@@ -48,7 +49,11 @@ exports.getResourceNotes = async (req, res) => {
       return res.status(404).json({ message: "Resource not found" });
     }
 
-    const notes = resource.notes || [];
+    // Filter notes to only return the current user's notes
+    const notes = (resource.notes || []).filter(note => 
+      note.user.toString() === userId.toString()
+    );
+    
     res.json({ notes });
   } catch (error) {
     res.status(500).json({ message: "Error fetching notes", error: error.message });
