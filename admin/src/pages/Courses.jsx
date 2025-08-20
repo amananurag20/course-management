@@ -33,12 +33,25 @@ const CourseCard = ({ course, onEdit, onDelete }) => {
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
-      <div className="relative h-48">
+      <div className="relative h-48 group">
         <img
           src={course.thumbnail || 'https://via.placeholder.com/800x400?text=Course+Thumbnail'}
           alt={course.title}
-          className="w-full h-full object-cover"
+          className="w-full h-full object-cover cursor-pointer transition-all duration-300 group-hover:brightness-75"
+          onClick={(e) => {
+            e.stopPropagation();
+            onEdit(course);
+          }}
+          title="Click to edit course"
         />
+        <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all duration-300 flex items-center justify-center">
+          <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-white bg-opacity-90 px-4 py-2 rounded-lg shadow-lg">
+            <div className="flex items-center text-gray-800">
+              <MdEdit className="mr-2" size={16} />
+              <span className="text-sm font-medium">Click to Edit</span>
+            </div>
+          </div>
+        </div>
         <div className="absolute top-4 right-4">
           <button
             onClick={(e) => {
@@ -103,10 +116,22 @@ const CourseForm = ({ course, onSubmit, onCancel }) => {
   const [formData, setFormData] = useState({
     title: course?.title || '',
     description: course?.description || '',
+    thumbnail: course?.thumbnail || '',
     startDate: course?.startDate ? new Date(course.startDate).toISOString().split('T')[0] : '',
     endDate: course?.endDate ? new Date(course.endDate).toISOString().split('T')[0] : '',
     status: course?.status || 'draft',
   });
+  const [thumbnailPreview, setThumbnailPreview] = useState(course?.thumbnail || '');
+
+  const handleThumbnailChange = (e) => {
+    const url = e.target.value;
+    setFormData({ ...formData, thumbnail: url });
+    setThumbnailPreview(url);
+  };
+
+  const handleThumbnailError = () => {
+    setThumbnailPreview('');
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -141,6 +166,40 @@ const CourseForm = ({ course, onSubmit, onCancel }) => {
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent min-h-[100px]"
             required
           />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="thumbnail">
+            Course Thumbnail
+          </label>
+          <div className="space-y-4">
+            <input
+              type="url"
+              id="thumbnail"
+              value={formData.thumbnail}
+              onChange={handleThumbnailChange}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              placeholder="Enter image URL for course thumbnail"
+            />
+            {thumbnailPreview && (
+              <div className="relative">
+                <img
+                  src={thumbnailPreview}
+                  alt="Thumbnail Preview"
+                  className="w-full h-48 object-cover rounded-lg border border-gray-200 shadow-sm"
+                  onError={handleThumbnailError}
+                />
+                <div className="absolute top-2 left-2 bg-green-600 bg-opacity-90 text-white px-2 py-1 text-xs rounded flex items-center">
+                  <MdCheck className="mr-1" size={12} />
+                  Preview
+                </div>
+              </div>
+            )}
+            {formData.thumbnail && !thumbnailPreview && (
+              <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-red-600 text-sm">⚠️ Image URL appears to be invalid or cannot be loaded</p>
+              </div>
+            )}
+          </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>

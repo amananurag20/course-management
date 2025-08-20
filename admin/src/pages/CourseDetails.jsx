@@ -38,10 +38,21 @@ const CourseEditForm = ({ course, onSubmit, onCancel }) => {
   const [formData, setFormData] = useState({
     title: course.title,
     description: course.description,
-    thumbnail: course.thumbnail,
+    thumbnail: course.thumbnail || '',
     startDate: course.startDate.split('T')[0],
     endDate: course.endDate.split('T')[0]
   });
+  const [thumbnailPreview, setThumbnailPreview] = useState(course.thumbnail || '');
+
+  const handleThumbnailChange = (e) => {
+    const url = e.target.value;
+    setFormData({ ...formData, thumbnail: url });
+    setThumbnailPreview(url);
+  };
+
+  const handleThumbnailError = () => {
+    setThumbnailPreview('');
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -71,13 +82,35 @@ const CourseEditForm = ({ course, onSubmit, onCancel }) => {
         />
       </div>
       <div>
-        <label className="block text-sm font-medium text-gray-700">Thumbnail URL</label>
-        <input
-          type="url"
-          value={formData.thumbnail}
-          onChange={(e) => setFormData({ ...formData, thumbnail: e.target.value })}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500"
-        />
+        <label className="block text-sm font-medium text-gray-700">Course Thumbnail</label>
+        <div className="space-y-4">
+          <input
+            type="url"
+            value={formData.thumbnail}
+            onChange={handleThumbnailChange}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500"
+            placeholder="Enter image URL for course thumbnail"
+          />
+          {thumbnailPreview && (
+            <div className="relative">
+              <img
+                src={thumbnailPreview}
+                alt="Thumbnail Preview"
+                className="w-full h-48 object-cover rounded-lg border border-gray-200 shadow-sm"
+                onError={handleThumbnailError}
+              />
+              <div className="absolute top-2 left-2 bg-green-600 bg-opacity-90 text-white px-2 py-1 text-xs rounded flex items-center">
+                <MdCheck className="mr-1" size={12} />
+                Preview
+              </div>
+            </div>
+          )}
+          {formData.thumbnail && !thumbnailPreview && (
+            <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-red-600 text-sm">⚠️ Image URL appears to be invalid or cannot be loaded</p>
+            </div>
+          )}
+        </div>
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div>
@@ -120,6 +153,118 @@ const CourseEditForm = ({ course, onSubmit, onCancel }) => {
   );
 };
 
+// Resource Item Component
+const ResourceItem = ({ resource, index, isEditing, onEdit, onUpdate, onCancel, onRemove }) => {
+  const [editData, setEditData] = useState({
+    title: resource.title,
+    type: resource.type,
+    url: resource.url
+  });
+
+  const handleSave = () => {
+    if (editData.title && editData.url) {
+      onUpdate(editData);
+    }
+  };
+
+  if (isEditing) {
+    return (
+      <div className="p-3 bg-yellow-50 rounded-md border border-yellow-200">
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Title</label>
+            <input
+              type="text"
+              value={editData.title}
+              onChange={(e) => setEditData({ ...editData, title: e.target.value })}
+              className="w-full text-sm rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Type</label>
+              <select
+                value={editData.type}
+                onChange={(e) => setEditData({ ...editData, type: e.target.value })}
+                className="w-full text-sm rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500"
+              >
+                <option value="video">Video</option>
+                <option value="document">Document</option>
+                <option value="link">Link</option>
+                <option value="audio">Audio</option>
+                <option value="presentation">Presentation</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">URL</label>
+              <input
+                type="url"
+                value={editData.url}
+                onChange={(e) => setEditData({ ...editData, url: e.target.value })}
+                className="w-full text-sm rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end space-x-2">
+            <button
+              type="button"
+              onClick={onCancel}
+              className="px-3 py-1 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={!editData.title || !editData.url}
+              className="px-3 py-1 text-xs font-medium text-white bg-purple-600 rounded hover:bg-purple-700 disabled:bg-gray-400"
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-md border border-gray-200 group hover:bg-gray-100 transition-colors">
+      <div className="flex-1">
+        <p className="font-medium text-gray-900">{resource.title}</p>
+        <p className="text-sm text-gray-500 capitalize">
+          <span className="font-medium">{resource.type}</span> • 
+          <a 
+            href={resource.url} 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-purple-600 hover:text-purple-700 ml-1"
+          >
+            {resource.url.length > 40 ? resource.url.substring(0, 40) + '...' : resource.url}
+          </a>
+        </p>
+      </div>
+      <div className="flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button
+          type="button"
+          onClick={onEdit}
+          className="text-blue-600 hover:text-blue-700 p-1 rounded-full hover:bg-blue-50 transition-colors"
+          title="Edit resource"
+        >
+          <MdEdit size={18} />
+        </button>
+        <button
+          type="button"
+          onClick={onRemove}
+          className="text-red-600 hover:text-red-700 p-1 rounded-full hover:bg-red-50 transition-colors"
+          title="Remove resource"
+        >
+          <MdDelete size={18} />
+        </button>
+      </div>
+    </div>
+  );
+};
+
 // Module Edit Form Component
 const ModuleEditForm = ({ module, onSubmit, onCancel }) => {
   const [formData, setFormData] = useState({
@@ -129,12 +274,13 @@ const ModuleEditForm = ({ module, onSubmit, onCancel }) => {
   });
 
   const [newResource, setNewResource] = useState({ title: '', type: 'video', url: '' });
+  const [editingResource, setEditingResource] = useState(null);
 
   const handleAddResource = () => {
     if (newResource.title && newResource.url) {
       setFormData({
         ...formData,
-        resources: [...formData.resources, { ...newResource }]
+        resources: [...formData.resources, { ...newResource, _id: Date.now().toString() }]
       });
       setNewResource({ title: '', type: 'video', url: '' });
     }
@@ -145,6 +291,24 @@ const ModuleEditForm = ({ module, onSubmit, onCancel }) => {
       ...formData,
       resources: formData.resources.filter((_, i) => i !== index)
     });
+  };
+
+  const handleEditResource = (index) => {
+    setEditingResource(index);
+  };
+
+  const handleUpdateResource = (index, updatedResource) => {
+    const updatedResources = [...formData.resources];
+    updatedResources[index] = updatedResource;
+    setFormData({
+      ...formData,
+      resources: updatedResources
+    });
+    setEditingResource(null);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingResource(null);
   };
 
   const handleSubmit = (e) => {
@@ -180,54 +344,69 @@ const ModuleEditForm = ({ module, onSubmit, onCancel }) => {
         <h4 className="font-medium text-gray-900">Resources</h4>
         <div className="space-y-2">
           {formData.resources.map((resource, index) => (
-            <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
-              <div>
-                <p className="font-medium">{resource.title}</p>
-                <p className="text-sm text-gray-500">{resource.type} • {resource.url}</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => handleRemoveResource(index)}
-                className="text-red-600 hover:text-red-700"
-              >
-                <MdDelete />
-              </button>
-            </div>
+            <ResourceItem
+              key={resource._id || index}
+              resource={resource}
+              index={index}
+              isEditing={editingResource === index}
+              onEdit={() => handleEditResource(index)}
+              onUpdate={(updatedResource) => handleUpdateResource(index, updatedResource)}
+              onCancel={handleCancelEdit}
+              onRemove={() => handleRemoveResource(index)}
+            />
           ))}
         </div>
         
         {/* Add Resource Form */}
-        <div className="grid grid-cols-4 gap-2">
-          <input
-            type="text"
-            placeholder="Resource Title"
-            value={newResource.title}
-            onChange={(e) => setNewResource({ ...newResource, title: e.target.value })}
-            className="col-span-1 rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500"
-          />
-          <select
-            value={newResource.type}
-            onChange={(e) => setNewResource({ ...newResource, type: e.target.value })}
-            className="col-span-1 rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500"
-          >
-            <option value="video">Video</option>
-            <option value="document">Document</option>
-            <option value="link">Link</option>
-          </select>
-          <input
-            type="url"
-            placeholder="Resource URL"
-            value={newResource.url}
-            onChange={(e) => setNewResource({ ...newResource, url: e.target.value })}
-            className="col-span-1 rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500"
-          />
-          <button
-            type="button"
-            onClick={handleAddResource}
-            className="col-span-1 px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-md hover:bg-purple-700"
-          >
-            Add Resource
-          </button>
+        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+          <h5 className="text-sm font-medium text-blue-800 mb-3">Add New Resource</h5>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Title</label>
+              <input
+                type="text"
+                placeholder="Resource Title"
+                value={newResource.title}
+                onChange={(e) => setNewResource({ ...newResource, title: e.target.value })}
+                className="w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Type</label>
+              <select
+                value={newResource.type}
+                onChange={(e) => setNewResource({ ...newResource, type: e.target.value })}
+                className="w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 text-sm"
+              >
+                <option value="video">Video</option>
+                <option value="document">Document</option>
+                <option value="link">Link</option>
+                <option value="audio">Audio</option>
+                <option value="presentation">Presentation</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">URL</label>
+              <input
+                type="url"
+                placeholder="https://example.com/resource"
+                value={newResource.url}
+                onChange={(e) => setNewResource({ ...newResource, url: e.target.value })}
+                className="w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 text-sm"
+              />
+            </div>
+            <div className="flex items-end">
+              <button
+                type="button"
+                onClick={handleAddResource}
+                disabled={!newResource.title || !newResource.url}
+                className="w-full px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-md hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center"
+              >
+                <MdAdd className="mr-1" size={16} />
+                Add Resource
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -258,81 +437,165 @@ const QuizForm = ({ moduleId, quiz, onSubmit, onCancel }) => {
     correctOption: quiz?.correctOption || 0,
     explanation: quiz?.explanation || ''
   });
+  const [errors, setErrors] = useState({});
 
   const handleOptionChange = (index, value) => {
     const newOptions = [...formData.options];
     newOptions[index] = value;
     setFormData({ ...formData, options: newOptions });
+    
+    // Clear errors when user starts typing
+    if (errors[`option${index}`]) {
+      setErrors({ ...errors, [`option${index}`]: '' });
+    }
+  };
+
+  const validateForm = () => {
+    const newErrors = {};
+    
+    if (!formData.question.trim()) {
+      newErrors.question = 'Question is required';
+    }
+    
+    formData.options.forEach((option, index) => {
+      if (!option.trim()) {
+        newErrors[`option${index}`] = `Option ${index + 1} is required`;
+      }
+    });
+    
+    // Check if all options are unique
+    const uniqueOptions = new Set(formData.options.filter(opt => opt.trim()));
+    if (uniqueOptions.size !== formData.options.length) {
+      newErrors.options = 'All options must be unique';
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSubmit(formData);
+    if (validateForm()) {
+      onSubmit(formData);
+    }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div>
-        <label className="block text-sm font-medium text-gray-700">Question</label>
-        <textarea
-          value={formData.question}
-          onChange={(e) => setFormData({ ...formData, question: e.target.value })}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500"
-          rows={3}
-          required
-        />
-      </div>
+    <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+      <h3 className="text-lg font-medium text-gray-900 mb-4">
+        {quiz ? 'Edit Quiz Question' : 'Add Quiz Question'}
+      </h3>
+      
+      {errors.options && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
+          <p className="text-red-600 text-sm">{errors.options}</p>
+        </div>
+      )}
+      
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Question *</label>
+          <textarea
+            value={formData.question}
+            onChange={(e) => {
+              setFormData({ ...formData, question: e.target.value });
+              if (errors.question) setErrors({ ...errors, question: '' });
+            }}
+            className={`mt-1 block w-full rounded-md shadow-sm focus:border-purple-500 focus:ring-purple-500 ${
+              errors.question ? 'border-red-300' : 'border-gray-300'
+            }`}
+            rows={3}
+            placeholder="Enter your quiz question here..."
+            required
+          />
+          {errors.question && (
+            <p className="mt-1 text-red-600 text-sm">{errors.question}</p>
+          )}
+        </div>
 
-      <div className="space-y-3">
-        <label className="block text-sm font-medium text-gray-700">Options</label>
-        {formData.options.map((option, index) => (
-          <div key={index} className="flex items-center space-x-3">
-            <input
-              type="radio"
-              name="correctOption"
-              checked={formData.correctOption === index}
-              onChange={() => setFormData({ ...formData, correctOption: index })}
-              className="h-4 w-4 text-purple-600 focus:ring-purple-500"
-            />
-            <input
-              type="text"
-              value={option}
-              onChange={(e) => handleOptionChange(index, e.target.value)}
-              placeholder={`Option ${index + 1}`}
-              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500"
-              required
-            />
-          </div>
-        ))}
-      </div>
+        <div className="space-y-4">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Answer Options * 
+            <span className="text-xs text-gray-500 ml-2">(Select the correct answer)</span>
+          </label>
+          {formData.options.map((option, index) => (
+            <div key={index} className="flex items-center space-x-3">
+              <div className="flex-shrink-0">
+                <input
+                  type="radio"
+                  name="correctOption"
+                  checked={formData.correctOption === index}
+                  onChange={() => setFormData({ ...formData, correctOption: index })}
+                  className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300"
+                />
+              </div>
+              <div className="flex-1">
+                <input
+                  type="text"
+                  value={option}
+                  onChange={(e) => handleOptionChange(index, e.target.value)}
+                  placeholder={`Option ${index + 1} (${String.fromCharCode(65 + index)})`}
+                  className={`block w-full rounded-md shadow-sm focus:border-purple-500 focus:ring-purple-500 ${
+                    errors[`option${index}`] ? 'border-red-300' : 'border-gray-300'
+                  }`}
+                  required
+                />
+                {errors[`option${index}`] && (
+                  <p className="mt-1 text-red-600 text-xs">{errors[`option${index}`]}</p>
+                )}
+              </div>
+              <div className="flex-shrink-0">
+                {formData.correctOption === index && (
+                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                    Correct
+                  </span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700">Explanation</label>
-        <textarea
-          value={formData.explanation}
-          onChange={(e) => setFormData({ ...formData, explanation: e.target.value })}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500"
-          rows={2}
-          placeholder="Explain why the correct answer is right (optional)"
-        />
-      </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Explanation 
+            <span className="text-xs text-gray-500 ml-2">(Optional)</span>
+          </label>
+          <textarea
+            value={formData.explanation}
+            onChange={(e) => setFormData({ ...formData, explanation: e.target.value })}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500"
+            rows={3}
+            placeholder="Provide an explanation for why the correct answer is right. This will help students learn from their mistakes."
+          />
+        </div>
 
-      <div className="flex justify-end space-x-3">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-        >
-          Cancel
-        </button>
-        <button
-          type="submit"
-          className="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-md hover:bg-purple-700"
-        >
-          {quiz ? 'Update Quiz' : 'Add Quiz'}
-        </button>
-      </div>
-    </form>
+        <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            className="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-md hover:bg-purple-700 transition-colors flex items-center"
+          >
+            {quiz ? (
+              <>
+                <MdEdit className="mr-2" size={16} />
+                Update Quiz
+              </>
+            ) : (
+              <>
+                <MdAdd className="mr-2" size={16} />
+                Add Quiz
+              </>
+            )}
+          </button>
+        </div>
+      </form>
+    </div>
   );
 };
 
@@ -550,17 +813,15 @@ const QuizManagement = ({ courseId, module }) => {
       </div>
 
       {showQuizForm ? (
-        <div className="bg-white rounded-lg shadow p-6">
-          <QuizForm
-            moduleId={module._id}
-            quiz={selectedQuiz}
-            onSubmit={selectedQuiz ? handleUpdateQuiz : handleAddQuiz}
-            onCancel={() => {
-              setShowQuizForm(false);
-              setSelectedQuiz(null);
-            }}
-          />
-        </div>
+        <QuizForm
+          moduleId={module._id}
+          quiz={selectedQuiz}
+          onSubmit={selectedQuiz ? handleUpdateQuiz : handleAddQuiz}
+          onCancel={() => {
+            setShowQuizForm(false);
+            setSelectedQuiz(null);
+          }}
+        />
       ) : mcqQuestions.length > 0 ? (
         <>
           <MCQQuestionList
@@ -828,12 +1089,22 @@ const CourseDetails = () => {
         </div>
       ) : (
         <div className="bg-white rounded-xl shadow-md overflow-hidden">
-          <div className="relative h-48">
+          <div className="relative h-48 group">
             <img
               src={course.thumbnail || 'https://via.placeholder.com/800x400?text=Course+Thumbnail'}
               alt={course.title}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover cursor-pointer transition-all duration-300 group-hover:brightness-90"
+              onClick={() => setShowCourseEdit(true)}
+              title="Click to edit course details"
             />
+            <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+              <div className="bg-white bg-opacity-90 px-3 py-1 rounded-lg shadow-lg">
+                <div className="flex items-center text-gray-800">
+                  <MdEdit className="mr-2" size={16} />
+                  <span className="text-sm font-medium">Edit Course</span>
+                </div>
+              </div>
+            </div>
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end">
               <div className="p-6 text-white">
                 <h1 className="text-3xl font-bold mb-2">{course.title}</h1>
@@ -881,7 +1152,10 @@ const CourseDetails = () => {
       <div className="border-b border-gray-200">
         <nav className="-mb-px flex space-x-8">
           <button
-            onClick={() => setActiveTab('overview')}
+            onClick={() => {
+              setActiveTab('overview');
+              setSelectedModule(null);
+            }}
             className={`py-4 px-1 border-b-2 font-medium text-sm ${
               activeTab === 'overview'
                 ? 'border-purple-500 text-purple-600'
@@ -891,7 +1165,10 @@ const CourseDetails = () => {
             <MdBook className="inline-block mr-2" /> Overview
           </button>
           <button
-            onClick={() => setActiveTab('students')}
+            onClick={() => {
+              setActiveTab('students');
+              setSelectedModule(null);
+            }}
             className={`py-4 px-1 border-b-2 font-medium text-sm ${
               activeTab === 'students'
                 ? 'border-purple-500 text-purple-600'
@@ -911,7 +1188,10 @@ const CourseDetails = () => {
             <MdQuiz className="inline-block mr-2" /> Quizzes
           </button>
           <button
-            onClick={() => setActiveTab('assignments')}
+            onClick={() => {
+              setActiveTab('assignments');
+              setSelectedModule(null);
+            }}
             className={`py-4 px-1 border-b-2 font-medium text-sm ${
               activeTab === 'assignments'
                 ? 'border-purple-500 text-purple-600'
@@ -921,7 +1201,10 @@ const CourseDetails = () => {
             <MdAssignment className="inline-block mr-2" /> Assignments
           </button>
           <button
-            onClick={() => setActiveTab('progress')}
+            onClick={() => {
+              setActiveTab('progress');
+              setSelectedModule(null);
+            }}
             className={`py-4 px-1 border-b-2 font-medium text-sm ${
               activeTab === 'progress'
                 ? 'border-purple-500 text-purple-600'
@@ -931,7 +1214,10 @@ const CourseDetails = () => {
             <MdAnalytics className="inline-block mr-2" /> Progress
           </button>
           <button
-            onClick={() => setActiveTab('settings')}
+            onClick={() => {
+              setActiveTab('settings');
+              setSelectedModule(null);
+            }}
             className={`py-4 px-1 border-b-2 font-medium text-sm ${
               activeTab === 'settings'
                 ? 'border-purple-500 text-purple-600'
@@ -1035,9 +1321,16 @@ const CourseDetails = () => {
                             {module.mcqQuestion ? (
                               <div className="flex items-center space-x-2">
                                 <MdQuiz className="text-purple-500" />
-                                <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-medium">
-                                  Has Quiz
-                                </span>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedModule(module);
+                                    setActiveTab('quizzes');
+                                  }}
+                                  className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-medium hover:bg-purple-200 transition-colors"
+                                >
+                                  Manage Quiz
+                                </button>
                               </div>
                             ) : (
                               <button
@@ -1087,31 +1380,68 @@ const CourseDetails = () => {
         {activeTab === 'quizzes' && (
           <div className="bg-white rounded-xl shadow-md p-6">
             {selectedModule ? (
-              <QuizManagement courseId={course._id} module={selectedModule} />
+              <div className="space-y-4">
+                <div className="flex items-center space-x-4">
+                  <button
+                    onClick={() => setSelectedModule(null)}
+                    className="flex items-center text-gray-600 hover:text-gray-800 transition-colors"
+                  >
+                    <MdArrowBack className="mr-2" size={20} />
+                    Back to Module List
+                  </button>
+                </div>
+                <QuizManagement courseId={course._id} module={selectedModule} />
+              </div>
             ) : (
               <div className="space-y-6">
-                <h3 className="text-lg font-medium text-gray-900">Module Quizzes</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {course.modules?.map((module) => (
-                    <div
-                      key={module._id}
-                      onClick={() => setSelectedModule(module)}
-                      className="bg-white rounded-lg border border-gray-200 p-6 cursor-pointer hover:shadow-md transition-shadow"
-                    >
-                      <h4 className="font-medium text-gray-900">{module.title}</h4>
-                      <div className="mt-4 flex justify-between items-center">
-                        <span className="text-sm text-gray-500">
-                          {module.mcqQuestion ? 'Has Quiz' : 'No Quiz'}
-                        </span>
-                        {module.completedBy?.length > 0 && (
-                          <span className="text-sm text-gray-500">
-                            {module.completedBy.length} Attempted
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                <div className="flex justify-between items-center">
+                  <h3 className="text-lg font-medium text-gray-900">Module Quizzes</h3>
+                  <p className="text-sm text-gray-500">Select a module to manage its quizzes</p>
                 </div>
+                {course.modules && course.modules.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {course.modules.map((module) => (
+                      <div
+                        key={module._id}
+                        onClick={() => setSelectedModule(module)}
+                        className="bg-white rounded-lg border border-gray-200 p-6 cursor-pointer hover:shadow-md hover:border-purple-300 transition-all group"
+                      >
+                        <div className="flex items-start justify-between mb-3">
+                          <h4 className="font-medium text-gray-900 group-hover:text-purple-600 transition-colors">
+                            {module.title}
+                          </h4>
+                          <MdQuiz className="text-purple-500 opacity-60 group-hover:opacity-100 transition-opacity" />
+                        </div>
+                        <p className="text-sm text-gray-600 mb-4 line-clamp-2">
+                          {module.content || "No description available"}
+                        </p>
+                        <div className="flex justify-between items-center">
+                          <span className={`text-sm font-medium ${
+                            module.mcqQuestion ? 'text-green-600' : 'text-gray-500'
+                          }`}>
+                            {module.mcqQuestion ? 'Has Quiz' : 'No Quiz'}
+                          </span>
+                          {module.completedBy?.length > 0 && (
+                            <span className="text-sm text-gray-500">
+                              {module.completedBy.length} Attempted
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <MdQuiz className="mx-auto text-gray-400 mb-4" size={48} />
+                    <p className="text-gray-500 mb-4">No modules available for quiz management.</p>
+                    <button
+                      onClick={() => setActiveTab('overview')}
+                      className="text-purple-600 hover:text-purple-700 font-medium"
+                    >
+                      Go to Overview to add modules first
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>

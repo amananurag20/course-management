@@ -41,7 +41,8 @@ const App = () => {
             <PrivateRoute>
               <AdminLayout>
                 <Routes>
-                  <Route index element={<Navigate to="/courses" replace />} />
+                  <Route index element={<Navigate to="/dashboard" replace />} />
+                  <Route path="dashboard" element={<Dashboard />} />
                   <Route path="courses" element={<Courses />} />
                   <Route path="courses/:id" element={<CourseDetails />} />
                   <Route path="courses/:courseId/modules/:moduleId/quiz" element={<ModuleQuiz />} />
@@ -49,13 +50,13 @@ const App = () => {
                   <Route path="mcq-questions/*" element={<MCQQuestions />} />
                   <Route path="problems/*" element={<Problems />} />
                   <Route path="assignments/*" element={<Assignments />} />
-                  <Route path="*" element={<Navigate to="/courses" replace />} />
+                  <Route path="*" element={<Navigate to="/dashboard" replace />} />
                 </Routes>
               </AdminLayout>
             </PrivateRoute>
           }
         />
-        <Route path="/" element={<Navigate to="/courses" replace />} />
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </Router>
   );
