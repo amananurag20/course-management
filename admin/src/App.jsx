@@ -10,6 +10,7 @@ import Users from './pages/Users';
 import MCQQuestions from './pages/MCQQuestions';
 import Problems from './pages/Problems';
 import Assignments from './pages/Assignments';
+import ModuleQuiz from './pages/ModuleQuiz';
 
 const PrivateRoute = ({ children }) => {
   const { isAuthenticated, loading } = useSelector((state) => state.auth);
@@ -40,20 +41,22 @@ const App = () => {
             <PrivateRoute>
               <AdminLayout>
                 <Routes>
-                  <Route index element={<Navigate to="/courses" replace />} />
+                  <Route index element={<Navigate to="/dashboard" replace />} />
+                  <Route path="dashboard" element={<Dashboard />} />
                   <Route path="courses" element={<Courses />} />
                   <Route path="courses/:id" element={<CourseDetails />} />
+                  <Route path="courses/:courseId/modules/:moduleId/quiz" element={<ModuleQuiz />} />
                   <Route path="users/*" element={<Users />} />
                   <Route path="mcq-questions/*" element={<MCQQuestions />} />
                   <Route path="problems/*" element={<Problems />} />
                   <Route path="assignments/*" element={<Assignments />} />
-                  <Route path="*" element={<Navigate to="/courses" replace />} />
+                  <Route path="*" element={<Navigate to="/dashboard" replace />} />
                 </Routes>
               </AdminLayout>
             </PrivateRoute>
           }
         />
-        <Route path="/" element={<Navigate to="/courses" replace />} />
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </Router>
   );

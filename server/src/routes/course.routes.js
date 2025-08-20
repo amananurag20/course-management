@@ -130,6 +130,32 @@ router.get(
   courseController.getModuleCompletion
 );
 
+// Module MCQ Quiz Routes
+router.get(
+  "/:courseId/modules/:moduleId/mcq",
+  protect,
+  checkRole(["instructor", "admin"]),
+  courseController.getModuleMCQs
+);
+router.post(
+  "/:courseId/modules/:moduleId/mcq",
+  protect,
+  checkRole(["instructor", "admin"]),
+  courseController.addModuleQuiz
+);
+router.put(
+  "/:courseId/modules/:moduleId/mcq/:quizId",
+  protect,
+  checkRole(["instructor", "admin"]),
+  courseController.updateModuleQuiz
+);
+router.delete(
+  "/:courseId/modules/:moduleId/mcq/:quizId",
+  protect,
+  checkRole(["instructor", "admin"]),
+  courseController.deleteModuleQuiz
+);
+
 // Note Management Routes (existing)
 router.get(
   "/:courseId/modules/:moduleIndex/resources/:resourceIndex/notes",

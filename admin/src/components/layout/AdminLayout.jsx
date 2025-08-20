@@ -17,7 +17,7 @@ import {
 import { logout } from '../../store/slices/authSlice';
 
 const navItems = [
-  { icon: MdDashboard, label: 'Dashboard', path: '/' },
+  { icon: MdDashboard, label: 'Dashboard', path: '/dashboard' },
   { icon: MdSchool, label: 'Courses', path: '/courses' },
   { icon: MdQuiz, label: 'MCQ Questions', path: '/mcq-questions' },
   { icon: MdCode, label: 'Problems', path: '/problems' },
@@ -51,7 +51,7 @@ const AdminLayout = ({ children }) => {
       >
         <div className="flex flex-col h-full">
           <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200">
-            <Link to="/" className="text-xl font-bold text-purple-600">
+            <Link to="/dashboard" className="text-xl font-bold text-purple-600">
               Admin Panel
             </Link>
             <button 
