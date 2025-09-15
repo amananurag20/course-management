@@ -1,10 +1,34 @@
 const express = require("express");
 const router = express.Router();
-const { executeCode } = require("../services/codeExecutionService");
+const { executeCode, runCustomCode } = require("../services/codeExecutionService");
 const { validateSubmission } = require("../middleware/validation");
 const { protect } = require("../middleware/auth");
 const Submission = require("../models/Submission");
 const Problem = require("../models/Problem");
+
+// Run code with custom input without saving submission
+router.post("/run", protect, async (req, res) => {
+  try {
+    const { code, language, problemId, input } = req.body;
+
+    const problem = await Problem.findById(problemId);
+    if (!problem) {
+      return res.status(404).json({ error: "Problem not found" });
+    }
+
+    const result = await runCustomCode({
+      code,
+      language,
+      problem,
+      input,
+    });
+
+    res.json(result);
+  } catch (error) {
+    console.error("Custom run error:", error);
+    res.status(500).json({ error: "Failed to execute code", details: error.message });
+  }
+});
 
 // Submit code for execution
 router.post("/execute", protect, validateSubmission, async (req, res) => {

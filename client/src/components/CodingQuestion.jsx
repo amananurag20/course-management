@@ -119,44 +119,38 @@ function CodingQuestion() {
     return "// Write your code here";
   };
 
-  const mockExecuteCode = (code, input) => {
+  const handleRunCustomInput = async () => {
     setConsoleOutput([]);
+    setIsExecuting(true);
 
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        const logs = [];
-        const mockConsole = {
-          log: (...args) => logs.push(args.join(" ")),
-        };
+    try {
+      let processedCode = code;
+      if (language === "javascript" && !code.trim().startsWith("function")) {
+        processedCode = `function solution(input) {\n${code}\n}`;
+      }
 
-        try {
-          const safeEval = new Function(
-            "input",
-            "console",
-            `
-              ${code}
-              return solution(JSON.parse(input));
-            `
-          );
+      const result = await submissionService.runCustomInput({
+        code: processedCode,
+        language,
+        problemId: question._id,
+        input: customInput,
+      });
 
-          const result = safeEval(input, mockConsole);
-          setConsoleOutput(logs);
-
-          resolve({
-            success: true,
-            output: JSON.stringify(result),
-            time: Math.random() * 100,
-            memory: Math.floor(Math.random() * 40) + 30,
-          });
-        } catch (error) {
-          setConsoleOutput([...logs, `Error: ${error.message}`]);
-          resolve({
-            success: false,
-            error: error.message,
-          });
-        }
-      }, 1000);
-    });
+      if (result.error) {
+        setConsoleOutput([`Error: ${result.error}`]);
+      } else if (result.output !== undefined) {
+        const outputStr =
+          typeof result.output === "string"
+            ? result.output
+            : JSON.stringify(result.output);
+        setConsoleOutput([outputStr]);
+      }
+    } catch (err) {
+      console.error("Custom input execution error:", err);
+      setConsoleOutput([`Error: ${err.message}`]);
+    } finally {
+      setIsExecuting(false);
+    }
   };
 
   const handleRunCode = async () => {
@@ -1048,8 +1042,11 @@ function CodingQuestion() {
                   className="w-full h-32 bg-gray-900 text-gray-300 p-3 rounded border border-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-500"
                 />
                 <button
-                  onClick={() => mockExecuteCode(code, customInput)}
-                  className="mt-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-500 transition-colors flex items-center shadow-md"
+                  onClick={handleRunCustomInput}
+                  disabled={isExecuting}
+                  className={`mt-2 px-4 py-2 bg-purple-600 text-white rounded-lg transition-colors flex items-center shadow-md ${
+                    isExecuting ? "opacity-50 cursor-not-allowed" : "hover:bg-purple-500"
+                  }`}
                 >
                   <MdPlayArrow size={20} className="mr-1" />
                   Run with Custom Input

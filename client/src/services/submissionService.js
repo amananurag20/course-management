@@ -55,6 +55,33 @@ const executeCode = async ({ code, language, problemId, testCases }) => {
   }
 };
 
+const runCustomInput = async ({ code, language, problemId, input }) => {
+  try {
+    const response = await axios.post(
+      `${API_URL}/submissions/run`,
+      {
+        code,
+        language,
+        problemId,
+        input,
+      },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+        timeout: 30000,
+      }
+    );
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      throw new Error(error.response.data.error || "Execution failed");
+    }
+    throw new Error(error.message || "Failed to execute code");
+  }
+};
+
 const getSubmissionHistory = async (problemId) => {
   try {
     const response = await axios.get(
@@ -73,5 +100,6 @@ const getSubmissionHistory = async (problemId) => {
 
 export const submissionService = {
   executeCode,
+  runCustomInput,
   getSubmissionHistory,
 };
