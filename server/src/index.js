@@ -15,7 +15,12 @@ const userRoutes = require("./routes/user.routes");
 const app = express();
 
 // Middleware
-app.use(cors());
+const corsOptions = {
+  origin: process.env.CORS_ORIGIN || "*",
+  credentials: true,
+  optionsSuccessStatus: 200,
+};
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // Routes
@@ -32,7 +37,7 @@ app.use("/api/users", userRoutes);
 mongoose
   .connect(
     process.env.MONGODB_URI ||
-      "mongodb+srv://amananurag20:YlnMdLa8jS8FTqJw@cluster0.oib3vus.mongodb.net/course_management"
+    ""
   )
   .then(() => console.log("Connected to MongoDB"))
   .catch((err) => console.error("MongoDB connection error:", err));
