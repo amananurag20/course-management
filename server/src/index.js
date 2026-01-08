@@ -11,6 +11,7 @@ const problemRoutes = require("./routes/problem.routes.js");
 const submissionRoutes = require("./routes/submissionRoutes.js");
 const mcqQuestionRoutes = require("./routes/mcqQuestionRoutes");
 const userRoutes = require("./routes/user.routes");
+const reelRoutes = require("./routes/reel.routes");
 
 const app = express();
 
@@ -32,6 +33,7 @@ app.use("/api/problems", problemRoutes);
 app.use("/api/submissions", submissionRoutes);
 app.use("/api/mcq-questions", mcqQuestionRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/reels", reelRoutes);
 
 // Database connection
 mongoose
