@@ -4,6 +4,8 @@ import {
   MdAccessTime,
   MdPeople,
   MdDragHandle,
+  MdKeyboardArrowUp,
+  MdKeyboardArrowDown,
 } from "react-icons/md";
 import { SidebarContext } from "../context/SidebarContext";
 import reelService from "../services/reelService";
@@ -116,6 +118,125 @@ const Reels = () => {
     };
   }, [currentReelIndex, reelsData.length]);
 
+  // Touch swipe handler for mobile
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    let touchStartY = 0;
+    let touchEndY = 0;
+    let isSwiping = false;
+
+    const handleTouchStart = (e) => {
+      touchStartY = e.touches[0].clientY;
+      isSwiping = true;
+    };
+
+    const handleTouchMove = (e) => {
+      if (!isSwiping) return;
+      touchEndY = e.touches[0].clientY;
+    };
+
+    const handleTouchEnd = () => {
+      if (!isSwiping) return;
+      isSwiping = false;
+
+      const swipeDistance = touchStartY - touchEndY;
+      const minSwipeDistance = 50; // Minimum distance for a swipe
+
+      if (Math.abs(swipeDistance) > minSwipeDistance) {
+        if (swipeDistance > 0) {
+          // Swiped up - go to next reel
+          handleReelChange(currentReelIndex + 1);
+        } else {
+          // Swiped down - go to previous reel
+          handleReelChange(currentReelIndex - 1);
+        }
+      }
+
+      touchStartY = 0;
+      touchEndY = 0;
+    };
+
+    container.addEventListener("touchstart", handleTouchStart, { passive: true });
+    container.addEventListener("touchmove", handleTouchMove, { passive: true });
+    container.addEventListener("touchend", handleTouchEnd, { passive: true });
+
+    return () => {
+      container.removeEventListener("touchstart", handleTouchStart);
+      container.removeEventListener("touchmove", handleTouchMove);
+      container.removeEventListener("touchend", handleTouchEnd);
+    };
+  }, [currentReelIndex, reelsData.length]);
+
+  // Mouse drag handler for desktop
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    let mouseStartY = 0;
+    let mouseEndY = 0;
+    let isDragging = false;
+
+    const handleMouseDown = (e) => {
+      // Only handle left mouse button
+      if (e.button !== 0) return;
+      mouseStartY = e.clientY;
+      isDragging = true;
+      container.style.cursor = 'grabbing';
+    };
+
+    const handleMouseMove = (e) => {
+      if (!isDragging) return;
+      mouseEndY = e.clientY;
+    };
+
+    const handleMouseUp = () => {
+      if (!isDragging) return;
+      isDragging = false;
+      container.style.cursor = 'grab';
+
+      const dragDistance = mouseStartY - mouseEndY;
+      const minDragDistance = 50; // Minimum distance for a drag
+
+      if (Math.abs(dragDistance) > minDragDistance) {
+        if (dragDistance > 0) {
+          // Dragged up - go to next reel
+          handleReelChange(currentReelIndex + 1);
+        } else {
+          // Dragged down - go to previous reel
+          handleReelChange(currentReelIndex - 1);
+        }
+      }
+
+      mouseStartY = 0;
+      mouseEndY = 0;
+    };
+
+    const handleMouseLeave = () => {
+      if (isDragging) {
+        isDragging = false;
+        container.style.cursor = 'grab';
+      }
+    };
+
+    // Set initial cursor
+    container.style.cursor = 'grab';
+
+    container.addEventListener("mousedown", handleMouseDown);
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+    container.addEventListener("mouseleave", handleMouseLeave);
+
+    return () => {
+      container.removeEventListener("mousedown", handleMouseDown);
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+      container.removeEventListener("mouseleave", handleMouseLeave);
+      container.style.cursor = 'default';
+    };
+  }, [currentReelIndex, reelsData.length]);
+
   if (loading) {
     return (
       <div
@@ -171,8 +292,8 @@ const Reels = () => {
                 key={reel._id}
                 onClick={() => handleReelChange(index)}
                 className={`p-3 rounded-lg cursor-pointer transition-all ${currentReelIndex === index
-                    ? "bg-purple-600 text-white"
-                    : "bg-gray-800 text-gray-300 hover:bg-gray-700"
+                  ? "bg-purple-600 text-white"
+                  : "bg-gray-800 text-gray-300 hover:bg-gray-700"
                   }`}
               >
                 <h3 className="font-medium">{reel.title}</h3>
@@ -223,21 +344,56 @@ const Reels = () => {
               </div>
             </div>
 
-            {/* Reel Indicators */}
-            <div className="absolute right-4 top-1/2 transform -translate-y-1/2 space-y-3 z-30 pointer-events-auto">
-              {reelsData.map((_, index) => (
-                <div
-                  key={index}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleReelChange(index);
-                  }}
-                  className={`w-1 h-5 rounded-full transition-all duration-300 cursor-pointer ${index === currentReelIndex
-                      ? "bg-white scale-y-125"
-                      : "bg-white/30 scale-100 hover:bg-white/50"
-                    }`}
-                />
-              ))}
+            {/* Navigation Controls - Right Side */}
+            <div className="absolute right-4 top-1/2 transform -translate-y-1/2 flex flex-col items-center space-y-3 z-30 pointer-events-auto">
+              {/* Up Arrow */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleReelChange(currentReelIndex - 1);
+                }}
+                disabled={currentReelIndex === 0}
+                className={`p-2 rounded-full transition-all ${currentReelIndex === 0
+                    ? "bg-gray-700/30 text-gray-600 cursor-not-allowed"
+                    : "bg-black/40 text-white hover:bg-purple-600 hover:scale-110"
+                  } backdrop-blur-sm`}
+                title="Previous reel"
+              >
+                <MdKeyboardArrowUp size={24} />
+              </button>
+
+              {/* Reel Indicators */}
+              <div className="flex flex-col space-y-2 py-2">
+                {reelsData.map((_, index) => (
+                  <div
+                    key={index}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleReelChange(index);
+                    }}
+                    className={`w-1 h-5 rounded-full transition-all duration-300 cursor-pointer ${index === currentReelIndex
+                        ? "bg-white scale-y-125"
+                        : "bg-white/30 scale-100 hover:bg-white/50"
+                      }`}
+                  />
+                ))}
+              </div>
+
+              {/* Down Arrow */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleReelChange(currentReelIndex + 1);
+                }}
+                disabled={currentReelIndex === reelsData.length - 1}
+                className={`p-2 rounded-full transition-all ${currentReelIndex === reelsData.length - 1
+                    ? "bg-gray-700/30 text-gray-600 cursor-not-allowed"
+                    : "bg-black/40 text-white hover:bg-purple-600 hover:scale-110"
+                  } backdrop-blur-sm`}
+                title="Next reel"
+              >
+                <MdKeyboardArrowDown size={24} />
+              </button>
             </div>
           </div>
         </div>
