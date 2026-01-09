@@ -74,25 +74,16 @@ function createWindow() {
       responseHeaders: {
         ...details.responseHeaders,
         'Content-Security-Policy': [
-          "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https://www.youtube.com https://youtube.com https://www.youtube-nocookie.com https://course-management-i5m6.onrender.com http://localhost:* ws://localhost:*; " +
-          "frame-src 'self' https://www.youtube.com https://youtube.com https://www.youtube-nocookie.com; " +
-          "media-src 'self' https://www.youtube.com https://youtube.com https://*.googlevideo.com blob: data:; " +
+          "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https://*.youtube.com https://*.google.com https://*.googlevideo.com https://*.ytimg.com https://course-management-i5m6.onrender.com http://localhost:* ws://localhost:*; " +
+          "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.youtube.com https://*.google.com https://*.gstatic.com; " +
+          "frame-src 'self' https://*.youtube.com https://*.google.com; " +
+          "media-src 'self' https://*.youtube.com https://*.googlevideo.com https://*.ytimg.com blob: data:; " +
           "img-src 'self' data: blob: https: http:; " +
-          "connect-src 'self' https://course-management-i5m6.onrender.com http://localhost:* ws://localhost:* https://www.youtube.com https://youtube.com;"
+          "connect-src 'self' https://*.youtube.com https://*.google.com https://*.googlevideo.com https://*.ytimg.com https://course-management-i5m6.onrender.com http://localhost:* ws://localhost:*; " +
+          "child-src 'self' https://*.youtube.com blob:;"
         ]
       }
     })
-  })
-
-  // Modify headers specifically for YouTube requests to fix Error 150/153
-  const filter = {
-    urls: ['*://*.youtube.com/*', '*://*.youtube-nocookie.com/*']
-  }
-
-  mainWindow.webContents.session.webRequest.onBeforeSendHeaders(filter, (details, callback) => {
-    const { requestHeaders } = details
-    requestHeaders['Referer'] = 'https://www.youtube.com/'
-    callback({ requestHeaders })
   })
 
   // Minimize to tray instead of closing

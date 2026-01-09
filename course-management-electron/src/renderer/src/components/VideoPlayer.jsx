@@ -27,15 +27,7 @@ const VideoPlayer = forwardRef(({ videoId, onTimeUpdate }, ref) => {
   const volumeControlRef = useRef(null);
   const settingsRef = useRef(null);
 
-  const opts = {
-    height: '100%',
-    width: '100%',
-    playerVars: {
-      autoplay: 0,
-      modestbranding: 1,
-      rel: 0,
-    },
-  };
+
 
   // Handle click outside for settings and volume
   useEffect(() => {
@@ -180,11 +172,6 @@ const VideoPlayer = forwardRef(({ videoId, onTimeUpdate }, ref) => {
               }
               // Set initial volume
               event.target.setVolume(volume);
-              // Add CSS to hide YouTube logo and right-click menu
-              const iframe = event.target.getIframe();
-              if (iframe) {
-                iframe.style.pointerEvents = "none";
-              }
               handleTimeUpdate(0);
             },
             onStateChange: (event) => {
