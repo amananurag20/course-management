@@ -165,8 +165,6 @@ const VideoPlayer = forwardRef(({ videoId, onTimeUpdate }, ref) => {
             fs: 1,
             playsinline: 1,
             enablejsapi: 1,
-            origin: window.location.origin,
-            widget_referrer: window.location.origin,
             disablekb: 1,
             iv_load_policy: 3,
             cc_load_policy: 0,
@@ -196,8 +194,8 @@ const VideoPlayer = forwardRef(({ videoId, onTimeUpdate }, ref) => {
               // Handle different player states
               switch (playerState) {
                 case YT.PlayerState.ENDED:
-                setIsPlaying(false);
-                setProgress(100);
+                  setIsPlaying(false);
+                  setProgress(100);
                   handleTimeUpdate(duration);
                   break;
                 case YT.PlayerState.PLAYING:
@@ -489,10 +487,10 @@ const VideoPlayer = forwardRef(({ videoId, onTimeUpdate }, ref) => {
                         {quality === "hd1080"
                           ? "1080p"
                           : quality === "hd720"
-                          ? "720p"
-                          : quality === "large"
-                          ? "480p"
-                          : "Auto"}
+                            ? "720p"
+                            : quality === "large"
+                              ? "480p"
+                              : "Auto"}
                       </button>
                     ))}
                   </div>

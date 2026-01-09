@@ -1,5 +1,5 @@
-appId: com.electron.app
-productName: course-management-electron
+appId: com.coursemanagement.app
+productName: Course Management System
 directories:
   buildResources: build
 files:
@@ -11,13 +11,15 @@ files:
 asarUnpack:
   - resources/**
 win:
-  executableName: course-management-electron
+  executableName: Course Management System
+  icon: resources/logo-coursemanagement.png
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
 mac:
+  icon: resources/logo-coursemanagement.png
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
     - NSCameraUsageDescription: Application requests access to the device's camera.
@@ -28,6 +30,7 @@ mac:
 dmg:
   artifactName: ${name}-${version}.${ext}
 linux:
+  icon: resources/logo-coursemanagement.png
   target:
     - AppImage
     - snap

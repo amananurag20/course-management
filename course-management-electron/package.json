@@ -26,6 +26,7 @@
     "@electron-toolkit/eslint-config-prettier": "^3.0.0",
     "@tailwindcss/vite": "^4.1.18",
     "@vitejs/plugin-react": "^5.1.1",
+    "dotenv": "^17.2.3",
     "electron": "^39.2.6",
     "electron-builder": "^26.0.12",
     "electron-vite": "^5.0.0",

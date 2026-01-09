@@ -6,6 +6,23 @@ import icon from '../../resources/icon.png?asset'
 let mainWindow = null
 let tray = null
 
+// Single instance lock - prevent multiple instances
+const gotTheLock = app.requestSingleInstanceLock()
+
+if (!gotTheLock) {
+  // If we didn't get the lock, quit this instance
+  app.quit()
+} else {
+  // If someone tries to run a second instance, focus our window instead
+  app.on('second-instance', (event, commandLine, workingDirectory) => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore()
+      if (!mainWindow.isVisible()) mainWindow.show()
+      mainWindow.focus()
+    }
+  })
+}
+
 function createWindow() {
   // Create the browser window.
   mainWindow = new BrowserWindow({
@@ -22,7 +39,10 @@ function createWindow() {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
       nodeIntegration: false,
-      contextIsolation: true
+      contextIsolation: true,
+      webviewTag: true,
+      allowRunningInsecureContent: false,
+      webSecurity: true
     }
   })
 
@@ -36,6 +56,43 @@ function createWindow() {
   mainWindow.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
     return { action: 'deny' }
+  })
+
+  // Allow YouTube embeds and media playback
+  mainWindow.webContents.session.setPermissionRequestHandler((webContents, permission, callback) => {
+    const allowedPermissions = ['media', 'mediaKeySystem', 'geolocation', 'notifications', 'midi', 'midiSysex', 'pointerLock', 'fullscreen']
+    if (allowedPermissions.includes(permission)) {
+      callback(true)
+    } else {
+      callback(false)
+    }
+  })
+
+  // Set CSP to allow YouTube iframes
+  mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [
+          "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https://www.youtube.com https://youtube.com https://www.youtube-nocookie.com https://course-management-i5m6.onrender.com http://localhost:* ws://localhost:*; " +
+          "frame-src 'self' https://www.youtube.com https://youtube.com https://www.youtube-nocookie.com; " +
+          "media-src 'self' https://www.youtube.com https://youtube.com https://*.googlevideo.com blob: data:; " +
+          "img-src 'self' data: blob: https: http:; " +
+          "connect-src 'self' https://course-management-i5m6.onrender.com http://localhost:* ws://localhost:* https://www.youtube.com https://youtube.com;"
+        ]
+      }
+    })
+  })
+
+  // Modify headers specifically for YouTube requests to fix Error 150/153
+  const filter = {
+    urls: ['*://*.youtube.com/*', '*://*.youtube-nocookie.com/*']
+  }
+
+  mainWindow.webContents.session.webRequest.onBeforeSendHeaders(filter, (details, callback) => {
+    const { requestHeaders } = details
+    requestHeaders['Referer'] = 'https://www.youtube.com/'
+    callback({ requestHeaders })
   })
 
   // Minimize to tray instead of closing
